@@ -6,14 +6,13 @@
 
 ---
 
-## Project Overview
+## Hard Deadlines
 
-This project develops **CLM-SS** (Composite Link Matrix State-Space), a principled approach to exact cross-frequency aggregation that replaces the ad hoc pre-aggregation used by ARIMAX and standard MIDAS.
-
-**Core research questions:**
-
-1. Who are MIDAS's natural competitors in the mixed-frequency literature?
-2. Is MIDAS competitive in an energy/financial setting?
+| Date               | Event                                                       |
+| ------------------ | ----------------------------------------------------------- |
+| Tue 2 June 2026    | Check-in session — progress review + confirm final scope    |
+| Mon 29 June 2026   | Submit thesis (max 30 pages) + A0 poster (by 12:00)        |
+| Tue 7 July 2026    | Oral defense — 15 min presentation + 15 min Q&A            |
 
 ---
 
@@ -23,71 +22,177 @@ This project develops **CLM-SS** (Composite Link Matrix State-Space), a principl
 midas_capstone/
 ├── R/
 │   ├── 00_setup.R          # Package installation
-│   ├── 01_tutorial.R       # MIDAS tutorial: USrealgdp + USunempr (m=12)
-│   ├── 02_arimax.R         # Benchmark 1: ARIMAX (pre-aggregate → ARIMA + X)
-│   ├── 03_adl_midas.R      # Benchmark 2: ADL-MIDAS (nealmon / nbeta weights)
-│   ├── 04_umidas.R         # Benchmark 3: U-MIDAS (unrestricted OLS)
-│   ├── 05_clm_ss.R         # Novel: CLM-SS state-space formulation (KFAS)
-│   └── 06_evaluation.R     # Rolling window RMSE/MAE + Diebold-Mariano test
+│   ├── 01_tutorial.R       # Phase 2a+2b: USrealgdp + USunempr tutorial
+│   ├── 02_rolling_window.R # Phase 2c: rolling RMSE/MAE + DM test
+│   ├── 03_energy_data.R    # Phase 3: energy dataset download + EDA
+│   ├── 04_benchmarks.R     # Phase 4: full benchmark suite
+│   ├── 05_clm_ss.R         # Phase 5: CLM-SS state-space (KFAS)
+│   ├── 06_simulation.R     # Phase 6: simulation study
+│   └── 07_lasso_midas.R    # Phase 7: LASSO-MIDAS extension
 ├── data/
 │   ├── raw/                # Original downloaded datasets
 │   └── processed/          # Cleaned / aligned series
 ├── output/
-│   ├── figures/            # All plots (saved as .pdf or .png)
-│   └── tables/             # Forecast error tables (saved as .csv)
+│   ├── figures/            # All plots (300 DPI+)
+│   └── tables/             # Forecast error tables (.csv)
 └── README.md
 ```
 
 ---
 
-## Phases & Checklist
+## Full Checklist
 
-### Phase 0 — Setup
+### Phase 0 — Environment Setup
 
-- [x] Install R packages: `midasr`, `forecast`, `quantmod`, `KFAS`, `tseries`, `urca`, `ggplot2`, `dplyr`
-- [x] Initialize GitHub repo (`midas_capstone`)
-- [x] Set up folder structure
+- [x] R + midasr working in VSCode (Alt+Enter / Ctrl+Shift+S)
+- [x] Packages installed: `midasr`, `forecast`, `quantmod`, `KFAS`, `tseries`, `urca`, `ggplot2`, `dplyr`, `lmtest`, `sandwich`
+- [x] Sanity check: `data("USrealgdp"); plot(USrealgdp)` — loads correctly
+- [x] Project folder structure created + GitHub repo initialized
 
-### Phase 1 — Tutorial (USrealgdp + USunempr, m=12)
+---
 
-- [x] Step 1: Load & inspect data — `frequency()`, `start()`, `end()`, raw plots
-- [x] Step 2: Stationarity transforms — `diff(log(GDP))`, `diff(unemp)`, plot
-- [ ] Step 3: Fit first MIDAS model — `midas_r()` with `nealmon` weights
-- [ ] Step 4: Try `nbeta` weights, compare lag shapes with `plot_midas_coef()`
-- [ ] Step 5: ARIMAX benchmark on same data
-- [ ] Step 6: Rolling window forecast — RMSE / MAE comparison
+### Phase 1 — Answer Supervisor Q1: Who are MIDAS's competitors?
 
-### Phase 2 — Literature Review (DJL Q1)
+*(Becomes the Literature Review section)*
 
-- [ ] Map MIDAS competitors: ARIMAX, U-MIDAS, MF-VAR, bridge equations, nowcasting
-- [ ] Summarize Ghysels & Marcellino Ch. 12 (pp. 453-502)
-- [ ] Build competitor comparison table (method, assumptions, flexibility, software)
-- [ ] Read Ghysels et al. (2004, 2007), Foroni et al. (2015), Marcellino & Schumacher (2010)
+- [ ] Write competitor comparison table:
 
-### Phase 3 — Empirical Application (DJL Q2)
+| Model | Mixed-freq native? | Aggregation approach | Key limitation vs CLM-SS |
+|-------|--------------------|----------------------|--------------------------|
+| ARIMAX | No | Pre-average (mean/sum) | Information loss, ad hoc |
+| ADL-MIDAS (`midas_r`) | Yes | Almon/Beta lag shape | Assumes parametric decay |
+| U-MIDAS (`midas_u`) | Yes | Unrestricted OLS | Too many params, unstable |
+| Non-param MIDAS (`midas_r_np`) | Yes | Breitung's smoother | No exact aggregation |
+| HAR-RV (`harstep`) | Partial | Fixed 1/5/22-day avg | Very rigid structure |
+| MF-VAR / Kalman | Yes | State-space | Complex, many variables needed |
+| Bridge equations | Partial | Pre-aggregation shortcut | Still ad hoc |
+| NowCasting (BDFM) | Yes | Kalman + EM | Needs many series, complex |
+| **CLM-SS (this thesis)** | **Yes — exact** | **Composite link matrix** | **Novel, needs validation** |
 
-- [ ] Choose energy dataset (WTI oil daily, electricity prices, or power demand)
-- [ ] Download and clean data (`quantmod` / FRED API)
-- [ ] Run all 4 models on energy data
-- [ ] Rolling window evaluation: RMSE, MAE, Diebold-Mariano test
-- [ ] Answer: Is MIDAS competitive vs ARIMAX / U-MIDAS in this setting?
+- [ ] Write 1-paragraph summary per competitor for Literature Review
+- [ ] Note which are implemented in `midasr` (saves coding effort)
+- [ ] Use Connected Papers (start: Ghysels 2004 + Marcellino "Forecasting with Mixed Frequencies")
+- [ ] Find 8-12 core references via SciSpace / Google Scholar
 
-### Phase 4 — CLM-SS (Novel Contribution)
+---
 
-- [ ] Formulate composite link matrix (aggregation constraint)
-- [ ] State-space representation with `KFAS`
-- [ ] Estimate model, compare forecasts to benchmarks
-- [ ] Validate exact aggregation property
+### Phase 2 — Answer Supervisor Q2: Is MIDAS competitive in energy/financial setting?
 
-### Phase 5 — Write-Up
+*(Becomes the empirical application section)*
 
+**Step 2a — Built-in data (zero setup)**
+
+- [x] Load `USrealgdp` + `USunempr`, inspect, transform to stationary series
+- [x] Fit `midas_r()` with `nealmon` weights — `AIC: -390.5` (best in-sample)
+- [x] Fit `midas_r()` with `nbeta` weights — compare lag shapes with `plot_midas_coef()`
+- [x] Fit `midas_u()` (U-MIDAS) — unrestricted OLS
+
+**Step 2b — ARIMAX baseline**
+
+- [x] Aggregate monthly unemployment to annual mean
+- [x] Fit `auto.arima(y, xreg = x_annual)` — `AIC: -342.5`
+- [x] In-sample comparison: nealmon beats ARIMAX by ~48 AIC points
+
+**Step 2c — Rolling window evaluation** ← **Next to do**
+
+- [ ] `split_data()` or manual loop: train 1949-1999, evaluate 2000-2011
+- [ ] Compute RMSE, MAE for ARIMAX and ADL-MIDAS on out-of-sample window
+- [ ] Plot: actual vs MIDAS forecast vs ARIMAX forecast
+- [ ] Diebold-Mariano test: is the difference statistically significant?
+- [ ] Write 1-page answer: when does MIDAS win, when does ARIMAX win?
+
+---
+
+### Phase 3 — Energy Dataset
+
+- [ ] Pick dataset: monthly electricity price + daily WTI oil from FRED
+- [ ] Load via `quantmod::getSymbols("DCOILWTICO", src="FRED")`
+- [ ] Align frequencies using `mlsd()` or manual indexing
+- [ ] EDA: time series plots, ACF/PACF, cross-frequency scatter, seasonal decomposition
+- [ ] Document data source, date accessed, units, transformations
+
+---
+
+### Phase 4 — Full Benchmark Suite (on energy data)
+
+- [ ] ARIMAX: aggregate daily → monthly, `auto.arima()` with exogenous
+- [ ] ADL-MIDAS nealmon: `midas_r()` with exponential Almon weights
+- [ ] ADL-MIDAS nbeta: `midas_r()` with normalized beta weights
+- [ ] U-MIDAS: `midas_u()` unrestricted OLS
+- [ ] Non-parametric MIDAS: `midas_r_np()` (Breitung smoother)
+- [ ] Model selection: `hf_lags_table()` + `lf_lags_table()` for AIC/BIC lag choice
+- [ ] Rolling window RMSE/MAE table for all models
+- [ ] Diebold-Mariano test: MIDAS vs ARIMAX significance
+
+---
+
+### Phase 5 — CLM-SS Framework (Novel Contribution)
+
+- [ ] Formalize composite link matrix Z (maps high-freq state → low-freq observation)
+- [ ] State-space setup in `KFAS` or `dlm`
+- [ ] Add ARIMA errors to state equation
+- [ ] Implement penalized likelihood (log-lik + ridge/lasso on lag weights)
+- [ ] Identifiability check: confirm estimable with data dimensions
+- [ ] Estimate on energy dataset, compare forecasts to Phase 4 benchmarks
+
+---
+
+### Phase 6 — Simulation Study
+
+- [ ] Define DGP: synthetic monthly outcome + daily covariate with known decay weights
+- [ ] Vary: frequency ratio (4×, 12×), sample size (T=50, 100, 200), noise level
+- [ ] Run 100+ replications per scenario — all methods side by side
+- [ ] Report: bias, RMSE, confidence interval coverage
+- [ ] Visualize: boxplots of RMSE by method and scenario
+
+---
+
+### Phase 7 — Feature Selection (LASSO extension)
+
+- [ ] Regularized MIDAS: penalize unrestricted lag coefficients (U-MIDAS + LASSO)
+- [ ] Compare: U-MIDAS vs LASSO-selected vs parametric ADL-MIDAS
+- [ ] Identify which daily lags matter most for energy outcome
+
+---
+
+### Phase 8 — Written Thesis (max 30 pages, due 29 June)
+
+- [ ] Cover page (title, supervisor, program, date, AI use declaration)
 - [ ] Abstract (150-250 words)
-- [ ] Introduction (motivation, research gap)
-- [ ] Literature Review (Phase 2 output)
-- [ ] Methodology (MIDAS, CLM-SS formulation)
-- [ ] Results (Phase 3 + 4 tables/figures)
-- [ ] Discussion & Conclusions
-- [ ] Poster (A0 portrait)
+- [ ] Introduction (2-3 pages)
+- [ ] Literature Review — Phase 1 output (3-4 pages)
+- [ ] Methodology — CLM-SS framework + benchmarks (4-5 pages)
+- [ ] Results — simulation tables + energy forecast comparison (4-5 pages)
+- [ ] Discussion (2-3 pages)
+- [ ] Conclusions + future work / R package idea (1-2 pages)
+- [ ] References (not counted in page limit)
+- [ ] Annex A — Individual Contribution Statement (max 1 page, submitted separately)
+
+---
+
+### Phase 9 — Poster (A0 format, due 29 June)
+
+- [ ] Sections: Background → Research Aim → Methodology → Results → Conclusion
+- [ ] Publication-quality figures only (300 DPI+)
+- [ ] Submit as PDF, portrait orientation (841 × 1189 mm)
+
+---
+
+### Phase 10 — Code & Documentation
+
+- [ ] Clean, readable R scripts with reproducible seeds (`set.seed()`)
+- [ ] All output figures saved to `output/figures/`
+- [ ] All result tables saved to `output/tables/`
+- [ ] (Stretch) Package with `devtools` as minimal R package
+
+---
+
+## Immediate Priority — Before 2 June Check-in
+
+1. **[DONE]** Run MIDAS tutorial on USData — `midas_r()`, nealmon, nbeta, ARIMAX in-sample
+2. **[NEXT]** Phase 2c rolling window — RMSE/MAE + Diebold-Mariano test on USData
+3. **[NEXT]** Phase 1 competitor table — written answer to Q1
+4. **Before 2 June** — working script + preliminary results to show DJL
 
 ---
 
@@ -96,8 +201,7 @@ midas_capstone/
 - Ghysels, E. & Marcellino, M. (2018). *Applied Economic Forecasting using Time Series Methods*. Oxford. **Chapter 12.**
 - Ghysels, E., Santa-Clara, P., Valkanov, R. (2004). The MIDAS Touch. *CIRANO Working Paper.*
 - Foroni, C., Marcellino, M., Schumacher, C. (2015). Unrestricted mixed data sampling (MIDAS). *J. Royal Stat. Soc. A*, 178(1).
+- Marcellino, M. & Schumacher, C. (2010). Factor MIDAS for nowcasting and forecasting. *J. Applied Econometrics.*
 - midasr package: Kvedaras & Zemlys-Balevičius (CRAN 2025-04-07)
 
 ---
-
-Check-in: **2 June 2026** | Thesis due: **29 June 2026** | Defense: **7 July 2026**
