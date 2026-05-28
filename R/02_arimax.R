@@ -22,9 +22,8 @@ fit_arimax <- auto.arima(y, xreg = as.numeric(x_annual), ic = "aic",
                          stepwise = FALSE, approximation = FALSE)
 summary(fit_arimax)
 
-# Residual diagnostics
+# Residual diagnostics — Ljung-Box p > 0.05 means no residual autocorrelation (good)
 checkresiduals(fit_arimax)
 
-# Save for comparison in 06_evaluation.R
-saveRDS(fit_arimax, "output/tables/fit_arimax.rds")
-cat("ARIMAX fitted and saved.\n")
+cat("\nARIMAX model selected:", arimaorder(fit_arimax), "\n")
+cat("AIC:", AIC(fit_arimax), "| BIC:", BIC(fit_arimax), "\n")

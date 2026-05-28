@@ -40,14 +40,15 @@ hAh_test(fit_nealmon)
 hAh_test(fit_nbeta)
 
 # --- Model selection table ----------------------------------
-ic_table <- midas_r_ic_table(
-  y,
-  table = list(fmls(x, 11, 12, nealmon)),
-  start = list(x = c(0, 0, 0))
+# midas_r_ic_table() has a NULL-environment bug in R 4.x — use manual comparison
+ic_table <- data.frame(
+  Weight   = c("nealmon", "nbeta"),
+  Params   = c(length(coef(fit_nealmon)), length(coef(fit_nbeta))),
+  AIC      = c(AIC(fit_nealmon), AIC(fit_nbeta)),
+  BIC      = c(BIC(fit_nealmon), BIC(fit_nbeta))
 )
-print(ic_table)
-
-# Save
-saveRDS(fit_nealmon, "output/tables/fit_nealmon.rds")
-saveRDS(fit_nbeta,   "output/tables/fit_nbeta.rds")
-cat("ADL-MIDAS models fitted and saved.\n")
+cat("\n--- ADL-MIDAS model comparison ---\n")
+print(ic_table, row.names = FALSE, digits = 5)
+cat("Best by AIC:", ic_table$Weight[which.min(ic_table$AIC)], "\n")
+cat("Best by BIC:", ic_table$Weight[which.min(ic_table$BIC)], "\n")
+cat("\nDone — models fitted and compared.\n")
