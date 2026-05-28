@@ -12,6 +12,8 @@ data("USunempr")
 y <- diff(log(USrealgdp))
 x <- window(diff(USunempr), start = 1949)
 
+trend <- 1:length(y)
+
 # midas_u: unrestricted — each of the 12 lags gets its own coefficient
 fit_umidas <- midas_u(y ~ fmls(x, 11, 12) + trend)
 summary(fit_umidas)

@@ -51,6 +51,9 @@ par(mfrow = c(1, 1))
 # nealmon = exponential Almon polynomial (2 free parameters)
 # start list provides initial values for the weight function parameters
 
+# trend must be defined explicitly — midasr does not auto-create it
+trend <- 1:length(y)
+
 fit_nealmon <- midas_r(
   y ~ trend + fmls(x, 11, 12, nealmon),
   start = list(x = c(0, 0, 0))
@@ -76,8 +79,10 @@ summary(fit_nbeta)
 
 # Compare lag shapes side by side
 par(mfrow = c(1, 2))
-plot_midas_coef(fit_nealmon); title("nealmon")
-plot_midas_coef(fit_nbeta);   title("nbeta")
+plot_midas_coef(fit_nealmon)
+title("nealmon")
+plot_midas_coef(fit_nbeta)
+title("nbeta")
 par(mfrow = c(1, 1))
 
 # AIC / BIC comparison
@@ -96,19 +101,17 @@ x_annual <- window(x_annual, start = 1949, end = 2011)
 fit_arimax <- auto.arima(y, xreg = as.numeric(x_annual))
 summary(fit_arimax)
 
-# ---- Step 6: Rolling window forecast evaluation ------------
-
-# Split: train on 1949-1999, evaluate on 2000-2011 (12 years)
-split <- split_data(list(y = y, x = x), start = c(2000, 1), end = c(2011, 1),
-                    expand = FALSE)
-
-# Rolling 1-step-ahead forecasts for MIDAS (nealmon)
-fc_midas <- forecast(fit_nealmon, newdata = split$test, h = 1)
-
-# In-sample fitted values for now (rolling OOS requires re-fitting loop)
-# See 06_evaluation.R for the full rolling window implementation
+# ---- Step 6: In-sample model comparison --------------------
+# Full rolling window OOS evaluation is in 06_evaluation.R
 
 cat("\n--- In-sample fit comparison ---\n")
 cat("nealmon — AIC:", AIC(fit_nealmon), " BIC:", BIC(fit_nealmon), "\n")
 cat("nbeta   — AIC:", AIC(fit_nbeta),   " BIC:", BIC(fit_nbeta),   "\n")
 cat("ARIMAX  — AIC:", AIC(fit_arimax),  " BIC:", BIC(fit_arimax),  "\n")
+
+# Quick look at in-sample residuals
+par(mfrow = c(1, 3))
+plot(resid(fit_nealmon), main = "nealmon residuals"); abline(h = 0, col = "red", lty = 2)
+plot(resid(fit_nbeta),   main = "nbeta residuals");   abline(h = 0, col = "red", lty = 2)
+plot(resid(fit_arimax),  main = "ARIMAX residuals");  abline(h = 0, col = "red", lty = 2)
+par(mfrow = c(1, 1))
