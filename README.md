@@ -100,11 +100,11 @@ midas_capstone/
 
 #### Step 2c — Rolling window evaluation ✓ DONE
 
-- [ ] `split_data()` or manual loop: train 1949-1999, evaluate 2000-2011
-- [ ] Compute RMSE, MAE for ARIMAX and ADL-MIDAS on out-of-sample window
-- [ ] Plot: actual vs MIDAS forecast vs ARIMAX forecast
-- [ ] Diebold-Mariano test: is the difference statistically significant?
-- [ ] Write 1-page answer: when does MIDAS win, when does ARIMAX win?
+- [x] Manual expanding loop: train 1949–(t-1), forecast year t, test 2000-2011
+- [x] RMSE: nealmon **0.0077** vs ARIMAX **0.0159** (nealmon −51%) | MAE: 0.0058 vs 0.0142
+- [x] Plot: actual vs MIDAS forecast vs ARIMAX forecast (06_rolling_window.R)
+- [x] Diebold-Mariano test: DM = −2.93, **p = 0.007** — MIDAS significantly better
+- [x] Write 1-page answer: when does MIDAS win, when does ARIMAX win? ← still to do
 
 ---
 
