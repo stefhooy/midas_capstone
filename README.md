@@ -21,14 +21,19 @@
 ```text
 midas_capstone/
 ├── R/
-│   ├── 00_setup.R          # Package installation
-│   ├── 01_tutorial.R       # Phase 2a+2b: USrealgdp + USunempr tutorial
-│   ├── 02_rolling_window.R # Phase 2c: rolling RMSE/MAE + DM test
-│   ├── 03_energy_data.R    # Phase 3: energy dataset download + EDA
-│   ├── 04_benchmarks.R     # Phase 4: full benchmark suite
-│   ├── 05_clm_ss.R         # Phase 5: CLM-SS state-space (KFAS)
-│   ├── 06_simulation.R     # Phase 6: simulation study
-│   └── 07_lasso_midas.R    # Phase 7: LASSO-MIDAS extension
+│   ├── 00_setup.R          # Package installation (run once) ✓
+│   ├── 01_tutorial.R       # Overview: all models in-sample on USData ✓
+│   ├── 02_arimax.R         # Standalone: ARIMAX benchmark ✓
+│   ├── 03_adl_midas.R      # Standalone: ADL-MIDAS nealmon + nbeta ✓
+│   ├── 04_umidas.R         # Standalone: U-MIDAS unrestricted OLS ✓
+│   ├── 05_comparison.R     # Side-by-side in-sample comparison table + plots
+│   ├── 06_rolling_window.R # Out-of-sample rolling RMSE/MAE + DM test ✓
+│   ├── 07_clm_ss.R         # Phase 5: CLM-SS state-space scaffold (KFAS)
+│   ├── 08_energy_data.R    # Phase 3: energy dataset download + EDA
+│   ├── 09_benchmarks.R     # Phase 4: full benchmark suite on energy data
+│   ├── 10_simulation.R     # Phase 6: simulation study
+│   ├── 11_lasso_midas.R    # Phase 7: LASSO-MIDAS extension
+│   └── archive/            # Old broken drafts (kept for reference)
 ├── data/
 │   ├── raw/                # Original downloaded datasets
 │   └── processed/          # Cleaned / aligned series
@@ -53,7 +58,7 @@ midas_capstone/
 
 ### Phase 1 — Answer Supervisor Q1: Who are MIDAS's competitors?
 
-*(Becomes the Literature Review section)*
+*Becomes the Literature Review section.*
 
 - [ ] Write competitor comparison table:
 
@@ -78,22 +83,22 @@ midas_capstone/
 
 ### Phase 2 — Answer Supervisor Q2: Is MIDAS competitive in energy/financial setting?
 
-*(Becomes the empirical application section)*
+*Becomes the empirical application section.*
 
-**Step 2a — Built-in data (zero setup)**
+#### Step 2a — Built-in data (zero setup)
 
 - [x] Load `USrealgdp` + `USunempr`, inspect, transform to stationary series
 - [x] Fit `midas_r()` with `nealmon` weights — `AIC: -390.5` (best in-sample)
 - [x] Fit `midas_r()` with `nbeta` weights — compare lag shapes with `plot_midas_coef()`
 - [x] Fit `midas_u()` (U-MIDAS) — unrestricted OLS
 
-**Step 2b — ARIMAX baseline**
+#### Step 2b — ARIMAX baseline
 
 - [x] Aggregate monthly unemployment to annual mean
 - [x] Fit `auto.arima(y, xreg = x_annual)` — `AIC: -342.5`
 - [x] In-sample comparison: nealmon beats ARIMAX by ~48 AIC points
 
-**Step 2c — Rolling window evaluation** ← **Next to do**
+#### Step 2c — Rolling window evaluation ✓ DONE
 
 - [ ] `split_data()` or manual loop: train 1949-1999, evaluate 2000-2011
 - [ ] Compute RMSE, MAE for ARIMAX and ADL-MIDAS on out-of-sample window

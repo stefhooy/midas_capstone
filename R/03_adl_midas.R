@@ -28,12 +28,18 @@ fit_nbeta <- midas_r(
 summary(fit_nbeta)
 
 # --- Lag weight comparison ----------------------------------
-par(mfrow = c(1, 2))
-plot_midas_coef(fit_nealmon)
-title("ADL-MIDAS: nealmon weights")
-plot_midas_coef(fit_nbeta)
-title("ADL-MIDAS: nbeta weights")
-par(mfrow = c(1, 1))
+# Plot separately so titles are not squeezed — hit Enter between plots
+op <- par(mar = c(5, 4, 5, 2))   # extra top margin for title
+
+plot_midas_coef(fit_nealmon, title = "nealmon (exp Almon) lag weights")
+mtext("ADL-MIDAS — exponential Almon: smooth monotone decay",
+      side = 3, line = 0.3, cex = 0.85, col = "grey30")
+
+plot_midas_coef(fit_nbeta, title = "nbeta (normalized Beta) lag weights")
+mtext("ADL-MIDAS — normalized Beta: note poor fit due to starting values",
+      side = 3, line = 0.3, cex = 0.85, col = "grey30")
+
+par(op)
 
 # --- Restriction tests (nealmon restrictions adequate?) -----
 hAh_test(fit_nealmon)
