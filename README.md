@@ -104,17 +104,17 @@ midas_capstone/
 - [x] RMSE: nealmon **0.0077** vs ARIMAX **0.0159** (nealmon −51%) | MAE: 0.0058 vs 0.0142
 - [x] Plot: actual vs MIDAS forecast vs ARIMAX forecast (06_rolling_window.R)
 - [x] Diebold-Mariano test: DM = −2.93, **p = 0.007** — MIDAS significantly better
-- [x] Write 1-page answer: when does MIDAS win, when does ARIMAX win? ← still to do
+- [x] Write 1-page answer: when does MIDAS win, when does ARIMAX win? → saved as `Midas_vs_ARIMAX.docx`
 
 ---
 
-### Phase 3 — Energy Dataset
+### Phase 3 — Energy Dataset ✓ DONE
 
-- [ ] Pick dataset: monthly electricity price + daily WTI oil from FRED
-- [ ] Load via `quantmod::getSymbols("DCOILWTICO", src="FRED")`
-- [ ] Align frequencies using `mlsd()` or manual indexing
-- [ ] EDA: time series plots, ACF/PACF, cross-frequency scatter, seasonal decomposition
-- [ ] Document data source, date accessed, units, transformations
+- [x] Dataset: **CPIENGSL** (monthly consumer energy CPI) + **DCOILWTICO** (daily WTI → weekly) + **PNRGINDEXM** (IMF index, EDA context)
+- [x] Load via `quantmod::getSymbols()` — 276 monthly obs, 1200 weekly obs, 0 NAs
+- [x] Align frequencies: daily WTI → weekly via `apply.weekly()`; ratio = 4.35 ≈ 4; m=4 fix in Phase 4
+- [x] EDA: 5 PNGs saved to `output/figures/` — levels, log-diff, ACF/PACF, STL decomposition, transmission chain scatter
+- [x] Documented: source = FRED, downloaded 01 June 2026, units, log-diff transforms, FRED links
 
 ---
 
@@ -192,12 +192,20 @@ midas_capstone/
 
 ---
 
-## Immediate Priority — Before 2 June Check-in
+## Progress Summary
 
-1. **[DONE]** Run MIDAS tutorial on USData — `midas_r()`, nealmon, nbeta, ARIMAX in-sample
-2. **[NEXT]** Phase 2c rolling window — RMSE/MAE + Diebold-Mariano test on USData
-3. **[NEXT]** Phase 1 competitor table — written answer to Q1
-4. **Before 2 June** — working script + preliminary results to show DJL
+| Phase | Status | Key result |
+| ----- | ------ | ---------- |
+| Phase 0 — Setup | ✓ Done | R + midasr + GitHub repo |
+| Phase 2a — USData in-sample | ✓ Done | nealmon AIC −390.5 beats ARIMAX −342.5 |
+| Phase 2b — ARIMAX baseline | ✓ Done | ARIMA(1,1,1), Ljung-Box p = 0.647 |
+| Phase 2c — Rolling window | ✓ Done | nealmon RMSE 0.0077 vs ARIMAX 0.0159, DM p = 0.007 |
+| Phase 3 — Energy EDA | ✓ Done | CPIENGSL + WTI weekly, 5 EDA plots saved |
+| Phase 1 — Competitor table | 🔲 Next | Literature review write-up |
+| Phase 4 — Energy benchmarks | 🔲 Next | `09_benchmarks.R` to write |
+| Phase 5 — CLM-SS | 🔲 Later | Scaffold ready in `07_clm_ss.R` |
+| Phase 6–7 — Sim + LASSO | 🔲 Later | |
+| Phase 8–9 — Thesis + Poster | 🔲 Later | Due 29 June 2026 |
 
 ---
 
