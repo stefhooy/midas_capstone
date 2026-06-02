@@ -6,6 +6,7 @@
 # Models:  ARIMAX | ADL-MIDAS nealmon | ADL-MIDAS nbeta | U-MIDAS
 # Section: In-sample AIC/BIC | Lag selection | Rolling window OOS
 # Output:  3 PNG figures + 2 CSV tables
+# For Phase 5: CLM-SS DM tests run 09_benchmarks.R and then run 07_clm_ss.R
 # ============================================================
 
 library(midasr)
@@ -391,6 +392,16 @@ write.csv(oos_results, "output/tables/energy_rolling_window_results.csv",
           row.names = FALSE)
 write.csv(is_table,    "output/tables/energy_insample_comparison.csv",
           row.names = FALSE)
+
+# Save forecast vectors for Phase 5 CLM-SS DM tests
+saveRDS(list(
+  fc_arimax  = fc_arimax,
+  fc_nealmon = fc_nealmon,
+  fc_nbeta   = fc_nbeta,
+  fc_umidas  = fc_umidas,
+  y_actual   = y_actual,
+  test_dates = cpi_dates[test_idx]
+), "data/processed/phase4_forecasts.rds")
 
 cat("\n=== Phase 4 complete ===\n")
 cat("Figures saved:\n")
