@@ -679,6 +679,14 @@ if (!is.null(ph4)) {
             row.names = FALSE)
 }
 
+# Save CLM-SS forecast vectors for Phase 7d directional accuracy analysis
+saveRDS(list(
+  fc_clmss4  = fc_clmss,
+  fc_clmss12 = fc_clmss12,
+  y_actual   = y_actual,
+  test_dates = cpi_dates[test_idx]
+), "data/processed/clmss_forecasts.rds")
+
 cat("\n=== Phase 5 complete ===\n")
 cat("Key results:\n")
 cat(sprintf("  CLM-SS (4 lags) RMSE:   %.5f  (+6.2%% vs ARIMAX — lag-limited)\n",
