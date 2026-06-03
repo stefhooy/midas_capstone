@@ -34,7 +34,7 @@ packages <- c(
   # --- Parallel computing (Phase 6 simulation) -------------
   "foreach",      # Parallel for-loops
   "doParallel",   # Parallel backend for foreach
-
+  "xgboost",      # XGBoost
   # --- VSCode graphics -------------------------------------
   "httpgd"        # HTTP graphics device for VSCode plots panel
 )

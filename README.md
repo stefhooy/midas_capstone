@@ -180,10 +180,10 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 
 #### 6c — XGBoost (tree-based tabular reference)
 
-- [ ] Input: 12 weekly WTI lag columns + lagged CPI as tabular features
-- [ ] xgboost package with 5-fold CV for depth, eta, nrounds hyperparameters
-- [ ] Rolling window OOS RMSE on same 2015-2022 test period
-- [ ] Purpose: defend against DJL defense question "did you try XGBoost?"
+- [x] Input: 12 weekly WTI lag columns + lagged CPI as tabular features
+- [x] xgboost package with 5-fold CV for depth, eta, nrounds hyperparameters
+- [x] Rolling window OOS RMSE on same 2015-2022 test period
+- [x] Purpose: defend against DJL defense question "did you try XGBoost?"
 
 #### 6d — Performance vs interpretability table
 
