@@ -1,0 +1,16 @@
+Phase 7e - Forecast Horizon Validity
+
+This project should be described as a one-month nowcasting exercise at h=1.
+For h=1, the model uses the four weekly WTI observations inside month t to
+predict CPI Energy for month t, which is published after the month closes.
+For h=2 and h=3, the exercise becomes true forecasting: WTI information from
+one or two months earlier is used to predict a future CPI Energy release.
+
+At h=1, MIDAS nbeta reduces RMSE by 31.1% vs ARIMAX.
+At h=2, MIDAS nbeta reduces RMSE by 14.9% vs ARIMAX.
+At h=3, MIDAS nbeta is 2.2% worse than ARIMAX.
+
+Interpretation: the thesis should emphasize the h=1 result as the main
+validity window. This matches the empirical lag evidence found throughout
+the project: MIDAS, CLM-SS, XGBoost, and LASSO-MIDAS all point to a WTI-to-CPI
+transmission peak around prior-month weeks 2-3, roughly 5-7 weeks.

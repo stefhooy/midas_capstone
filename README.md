@@ -42,7 +42,7 @@
 | Segmented regression | Structural break analysis: 2008, 2014, COVID | Phase 7c |
 | Directional accuracy | Sign-correct %, precision/recall, Mincer-Zarnowitz | Phase 7d — DONE |
 | Energy/oil literature | Hamilton, Kilian, Baumeister domain refs | Phase 1 — DONE |
-| Forecast horizon validity | How far ahead is oil-CPI prediction valid? Based on oil literature | Phase 7e (new) |
+| Forecast horizon validity | How far ahead is oil-CPI prediction valid? Based on oil literature | Phase 7e - DONE |
 | Interpretability table | RMSE vs complexity vs interpretability trade-off table | Phase 8 |
 
 ---
@@ -231,11 +231,11 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 
 *Answers user question: how long is it valid to predict WTI-to-CPI? What are our assumptions?*
 
-- [ ] **Assumption audit**: document what we assume when forecasting month t CPI using week t WTI data. Is this nowcasting or true forecasting? What would change at 2-month or 3-month ahead horizon?
-- [ ] **Horizon comparison**: run rolling window at h=1, h=2, h=3 steps ahead. Does MIDAS advantage grow or shrink with horizon? Based on Kilian and Lewis (2011) finding that peak oil-to-CPI effect occurs at 6-8 weeks, MIDAS should outperform ARIMAX most at h=1 and lose advantage at h=3.
-- [ ] **Predictability window from literature**: Hamilton (1983) shows oil effects persist 4-8 months. Baumeister and Kilian (2015) show oil price forecasts are most useful at 1-3 month horizons. Kilian (2009) supply vs demand shock distinction affects how long the transmission lasts.
-- [ ] **Rolling subperiod analysis**: plot RMSE by year (2015, 2016, ..., 2022) for each model. Identify which years MIDAS wins/loses most. 2020 COVID year is the key stress test.
-- [ ] **Summary for thesis discussion**: state explicitly that this is a nowcasting study (WTI for month t used to predict CPI for month t), valid at 1-month horizon, and that the 6-week transmission lag found in our CLM-SS weights is consistent with Kilian and Lewis (2011).
+- [x] **Assumption audit**: h=1 is a nowcast because WTI weeks from month t are used to predict CPI Energy for month t after the month closes; h=2 and h=3 are true forecasts using earlier WTI information.
+- [x] **Horizon comparison**: h=1 nbeta RMSE 0.02057 (-31.1% vs ARIMAX); h=2 nbeta RMSE 0.02419 (-14.9%); h=3 nbeta RMSE 0.03023 (+2.2%, no MIDAS advantage).
+- [x] **Predictability window from literature**: h=1 result is the main validity window; h=2 remains useful; h=3 fades, consistent with the 5-7 week lag evidence and oil transmission literature.
+- [x] **Rolling subperiod analysis**: yearly RMSE table saved; COVID/recovery years shown explicitly in figure 22.
+- [x] **Summary for thesis discussion**: this is primarily a one-month nowcasting study; the lag hump around prior-month weeks 2-3 is the interpretable transmission mechanism.
 
 ---
 
@@ -304,10 +304,10 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | Phase 5 — CLM-SS | Done | CLM-SS(12) RMSE 0.02258 (-24%); confirms lag hump |
 | Phase 7d — Directional accuracy | Done | nealmon 80.2% dir. acc.; 100% crash recall vs 50% ARIMAX |
 | Phase 6 — ML benchmarks | To do | XGBoost, LSTM, Kernel U-MIDAS, interpretability table |
-| Phase 7a — LASSO-MIDAS | To do | Does LASSO recover the lag 5-6 hump? |
+| Phase 7a — LASSO-MIDAS | Done | RMSE 0.02103; largest lags wti_m1_w2 and wti_m1_w3 confirm hump |
 | Phase 7b — PCA on WTI lags | To do | VIF analysis, PCA-ARIMAX comparison |
 | Phase 7c — Segmented regression | To do | Structural breaks 2008, 2014, COVID |
-| Phase 7e — Forecast horizon validity | To do | h=1/2/3 comparison; nowcasting assumption audit |
+| Phase 7e — Forecast horizon validity | Done | h=1 main window (-31.1%); h=2 useful (-14.9%); h=3 fades (+2.2%) |
 | Phase 8 — Thesis writing | To do | Due 29 June 2026, 30 pages |
 | Phase 9 — Poster | To do | Due 29 June 2026, A0 PDF |
 | Phase 10 — Code cleanup | To do | |
