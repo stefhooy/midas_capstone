@@ -198,11 +198,11 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 
 #### 7a — LASSO-MIDAS (to do)
 
-- [ ] Apply LASSO penalty to U-MIDAS 12-lag coefficients via glmnet
-- [ ] Lambda selection by time-series cross-validation (not random k-fold)
-- [ ] Which weekly lags does LASSO zero out? Does LASSO data-adaptively recover the lag 5-6 hump?
-- [ ] Compare OOS RMSE to ridge CLM-SS, U-MIDAS, and MIDAS nbeta
-- [ ] Key thesis argument: LASSO discovers the same lag structure as the parametric shapes, confirming the hump is real
+- [x] Apply LASSO penalty to U-MIDAS 12-lag coefficients via glmnet
+- [x] Lambda selection by time-series cross-validation (not random k-fold)
+- [x] Which weekly lags does LASSO zero out? Does LASSO data-adaptively recover the lag 5-6 hump?
+- [x] Compare OOS RMSE to ridge CLM-SS, U-MIDAS, and MIDAS nbeta
+- [x] Key thesis argument: LASSO discovers the same lag structure as the parametric shapes, confirming the hump is real
 
 #### 7b — PCA on weekly WTI lags (to do)
 

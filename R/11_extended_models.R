@@ -276,3 +276,236 @@ cat("  output/figures/15_precision_recall.png\n")
 cat("  output/figures/16_mz_beta.png\n")
 cat("Table saved:\n")
 cat("  output/tables/extended_metrics_all_models.csv\n")
+
+# ============================================================
+# PHASE 7a — LASSO-MIDAS
+# ============================================================
+# Apply L1 (LASSO) penalty to U-MIDAS 12-lag coefficients.
+#
+# U-MIDAS sets all 12 weekly WTI lag coefficients free (OLS, no penalty).
+# LASSO-MIDAS adds an L1 penalty that shrinks some coefficients to exactly
+# zero, producing a sparse lag structure. The key question: do the surviving
+# non-zero lags match the hump at prior-month weeks 2-3 already identified
+# by MIDAS (parametric), CLM-SS (MLE), and XGBoost (tree-based)?
+#
+# If yes, four completely independent methods agree on the same lag
+# structure — strong evidence that the 5-7 week WTI-to-CPI transmission
+# lag is real and not an artefact of any one method.
+# ============================================================
+
+library(glmnet)
+
+cat("\n============================================================\n")
+cat("PHASE 7a — LASSO-MIDAS\n")
+cat("============================================================\n\n")
+
+# ---- Build 12-lag WTI matrix (no AR lags — matches U-MIDAS) ----
+lasso_feat_names <- c(paste0("wti_m0_w", 1:4),
+                      paste0("wti_m1_w", 1:4),
+                      paste0("wti_m2_w", 1:4))
+
+# X_wti12: reuse the same build functions from Phase 7d setup
+build_midas_x_lasso <- function(wti_series, cpi_index) {
+  months    <- as.yearmon(cpi_index)
+  wti_dates <- as.Date(index(wti_series))
+  wti_vals  <- as.numeric(wti_series)
+  n         <- length(months)
+  x_mat     <- matrix(NA_real_, nrow = n, ncol = 4L)
+  for (i in seq_len(n)) {
+    m_start  <- as.Date(months[i])
+    m_end    <- as.Date(months[i] + 1/12) - 1L
+    in_month <- which(wti_dates >= m_start & wti_dates <= m_end)
+    if (length(in_month) >= 4L) {
+      sel <- tail(in_month, 4L)
+    } else {
+      before <- which(wti_dates < m_start)
+      sel    <- c(tail(before, 4L - length(in_month)), in_month)
+    }
+    x_mat[i, ] <- wti_vals[sel]
+  }
+  x_mat
+}
+
+build_ext_x_lasso <- function(X_mat, n_months_back = 2L) {
+  n     <- nrow(X_mat)
+  n_col <- 4L * (n_months_back + 1L)
+  X_ext <- matrix(NA_real_, nrow = n, ncol = n_col)
+  for (i in seq_len(n)) {
+    if (i > n_months_back) {
+      lag_rows   <- seq(i, i - n_months_back)
+      X_ext[i, ] <- as.numeric(t(X_mat[lag_rows, ]))
+    }
+  }
+  X_ext
+}
+
+X_wti4_l  <- build_midas_x_lasso(wti_wk, index(cpi_monthly))
+X_lasso   <- build_ext_x_lasso(X_wti4_l, n_months_back = 2L)
+colnames(X_lasso) <- lasso_feat_names
+
+# ---- Lambda selection: tune on 2000-2012, validate on 2013-2014 ----
+cat("=== LASSO lambda selection ===\n")
+
+tune_mask <- cpi_dates <= as.Date("2012-12-31")
+val_mask  <- cpi_dates >  as.Date("2012-12-31") & cpi_dates <= as.Date("2014-12-31")
+
+ok_tune <- which(tune_mask & complete.cases(X_lasso))
+ok_val  <- which(val_mask  & complete.cases(X_lasso))
+
+X_tune_l <- X_lasso[ok_tune, ]; y_tune_l <- y_all[ok_tune]
+X_val_l  <- X_lasso[ok_val,  ]; y_val_l  <- y_all[ok_val]
+
+# Fit LASSO path on training data
+path_fit <- glmnet(X_tune_l, y_tune_l, alpha = 1, standardize = TRUE)
+
+# Evaluate on validation set for each lambda
+val_preds_l  <- predict(path_fit, newx = X_val_l)
+val_rmse_l   <- apply(val_preds_l, 2, function(p)
+  sqrt(mean((y_val_l - p)^2, na.rm = TRUE)))
+
+best_lambda_lasso <- path_fit$lambda[which.min(val_rmse_l)]
+n_nonzero         <- path_fit$df[which.min(val_rmse_l)]
+
+cat(sprintf("Best lambda: %.6f | Non-zero lags: %d / 12 | Val RMSE: %.5f\n\n",
+            best_lambda_lasso, n_nonzero, min(val_rmse_l)))
+
+# ---- In-sample coefficients at best lambda (full 2000-2022 sample) ----
+ok_all     <- which(complete.cases(X_lasso))
+fit_lasso_is <- glmnet(X_lasso[ok_all, ], y_all[ok_all],
+                       alpha = 1, lambda = best_lambda_lasso,
+                       standardize = TRUE)
+
+lasso_coefs  <- as.numeric(coef(fit_lasso_is))[-1]   # drop intercept
+names(lasso_coefs) <- lasso_feat_names
+
+cat("=== LASSO coefficients at best lambda (full sample) ===\n")
+for (j in seq_along(lasso_coefs)) {
+  zero_flag <- if (abs(lasso_coefs[j]) < 1e-8) " [zeroed out]" else ""
+  cat(sprintf("  %-12s  %+.5f%s\n",
+              lasso_feat_names[j], lasso_coefs[j], zero_flag))
+}
+cat(sprintf("\nSurviving lags: %s\n",
+            paste(lasso_feat_names[abs(lasso_coefs) > 1e-8], collapse = ", ")))
+
+# ---- Rolling window OOS evaluation (2015-2022) ----
+cat("\n=== LASSO-MIDAS rolling window (expanding, 2015-2022) ===\n")
+
+test_dates_l <- which(cpi_dates >= as.Date("2015-01-01"))
+n_test_l     <- length(test_dates_l)
+fc_lasso_rw  <- rep(NA_real_, n_test_l)
+
+t0_l <- proc.time()
+
+for (i in seq_len(n_test_l)) {
+  te_i  <- test_dates_l[i]
+  end_i <- te_i - 1L
+
+  ok_tr <- which(seq_len(end_i) %in% ok_all)
+  if (length(ok_tr) < 15L) next
+  if (any(is.na(X_lasso[te_i, ]))) next
+
+  X_tr_l <- X_lasso[ok_tr, ]; y_tr_l <- y_all[ok_tr]
+  X_te_l <- matrix(X_lasso[te_i, ], nrow = 1L)
+
+  fit_l         <- glmnet(X_tr_l, y_tr_l, alpha = 1,
+                           lambda = best_lambda_lasso, standardize = TRUE)
+  fc_lasso_rw[i] <- as.numeric(predict(fit_l, newx = X_te_l,
+                                        s = best_lambda_lasso))
+}
+
+elapsed_l <- round((proc.time() - t0_l)["elapsed"], 1)
+cat("LASSO-MIDAS rolling window complete in", elapsed_l, "seconds.\n\n")
+
+# ---- Accuracy metrics ----
+y_actual_l  <- y_all[test_dates_l]
+e_lasso     <- y_actual_l - fc_lasso_rw
+
+rmse_l   <- function(e) sqrt(mean(e^2, na.rm = TRUE))
+mae_l    <- function(e) mean(abs(e),   na.rm = TRUE)
+dir_acc_l <- function(fc, actual) {
+  ok <- !is.na(fc)
+  round(mean(sign(actual[ok]) == sign(fc[ok])) * 100, 1)
+}
+
+cat("=== LASSO-MIDAS OOS accuracy (2015-2022) ===\n")
+cat(sprintf("  RMSE:            %.5f\n", rmse_l(e_lasso)))
+cat(sprintf("  MAE:             %.5f\n", mae_l(e_lasso)))
+cat(sprintf("  Directional acc: %.1f%%\n", dir_acc_l(fc_lasso_rw, y_actual_l)))
+cat(sprintf("  Non-zero lags:   %d / 12\n", n_nonzero))
+cat(sprintf("  Lambda:          %.6f\n\n", best_lambda_lasso))
+
+# Compare to Phase 4 benchmarks
+if (!is.null(ph4)) {
+  arimax_rmse_l <- rmse_l(ph4$y_actual - ph4$fc_arimax)
+  nbeta_rmse_l  <- rmse_l(ph4$y_actual - ph4$fc_nbeta)
+  umidas_rmse_l <- rmse_l(ph4$y_actual - ph4$fc_umidas)
+
+  cat("=== LASSO-MIDAS vs benchmarks ===\n")
+  cat(sprintf("  ARIMAX       RMSE: %.5f  (baseline)\n",    arimax_rmse_l))
+  cat(sprintf("  U-MIDAS      RMSE: %.5f  (OLS, no penalty)\n", umidas_rmse_l))
+  cat(sprintf("  LASSO-MIDAS  RMSE: %.5f  (%+.1f%% vs ARIMAX)\n",
+              rmse_l(e_lasso),
+              100 * (rmse_l(e_lasso) - arimax_rmse_l) / arimax_rmse_l))
+  cat(sprintf("  nbeta        RMSE: %.5f  (best MIDAS model)\n\n", nbeta_rmse_l))
+}
+
+# ---- Plots ----
+
+# 7a-i: LASSO coefficient bar chart
+render(function() {
+  cols <- ifelse(grepl("wti_m1", lasso_feat_names), "tomato",
+           ifelse(grepl("wti_m2", lasso_feat_names), "darkorange", "steelblue"))
+  # Mark zeroed coefficients with lighter shade
+  cols[abs(lasso_coefs) < 1e-8] <- "grey85"
+
+  par(mar = c(5, 7, 4, 2))
+  bp <- barplot(lasso_coefs,
+                names.arg = lasso_feat_names,
+                horiz = FALSE, las = 2,
+                col = cols, border = "white",
+                main = "LASSO-MIDAS Coefficients at Best Lambda",
+                sub  = sprintf("lambda=%.5f | %d / 12 lags survive | Grey = zeroed out",
+                               best_lambda_lasso, n_nonzero),
+                ylab = "Coefficient value")
+  abline(h = 0, col = "grey40", lty = 2)
+  legend("topright", bty = "n", cex = 0.82,
+         fill = c("steelblue", "tomato", "darkorange", "grey85"),
+         legend = c("Current month (m0)", "Prior month (m1)",
+                    "2 months ago (m2)", "Zeroed by LASSO"))
+}, "output/figures/19_lasso_coefficients.png", 10, 5)
+
+# 7a-ii: LASSO path (coefficients vs log lambda)
+render(function() {
+  par(mar = c(5, 4, 4, 2))
+  plot(path_fit, xvar = "lambda", label = TRUE,
+       main = "LASSO-MIDAS Regularisation Path",
+       sub  = "Each line = one weekly WTI lag; vertical dashed = selected lambda")
+  abline(v = log(best_lambda_lasso), col = "firebrick", lty = 2, lwd = 1.5)
+}, "output/figures/20_lasso_path.png", 10, 5)
+
+# ---- Save ----
+saveRDS(list(
+  fc_lasso      = fc_lasso_rw,
+  y_actual      = y_actual_l,
+  test_dates    = cpi_dates[test_dates_l],
+  lambda        = best_lambda_lasso,
+  coefs         = lasso_coefs,
+  n_nonzero     = n_nonzero
+), "data/processed/lasso_forecasts.rds")
+
+write.csv(
+  data.frame(Feature = lasso_feat_names, Coefficient = lasso_coefs,
+             Nonzero = abs(lasso_coefs) > 1e-8),
+  "output/tables/lasso_midas_coefficients.csv", row.names = FALSE
+)
+
+cat("=== Phase 7a complete ===\n")
+cat(sprintf("  LASSO-MIDAS RMSE: %.5f | Dir. Acc.: %.1f%%\n",
+            rmse_l(e_lasso), dir_acc_l(fc_lasso_rw, y_actual_l)))
+cat(sprintf("  Non-zero lags: %d / 12 | Lambda: %.6f\n",
+            n_nonzero, best_lambda_lasso))
+cat("Figures: 19_lasso_coefficients.png | 20_lasso_path.png\n")
+cat("Tables:  lasso_midas_coefficients.csv\n")
+cat("Data:    data/processed/lasso_forecasts.rds\n\n")
+cat("Key question: do the surviving lags match the lag 5-6 hump\n")
+cat("already identified by MIDAS, CLM-SS, and XGBoost?\n")
