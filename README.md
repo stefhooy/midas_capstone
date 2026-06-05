@@ -35,7 +35,7 @@
 | Request | What DJL asked | Status |
 | --- | --- | --- |
 | Kernel U-MIDAS | Non-parametric smoother on lag weights (Breitung and Roling 2015) | Phase 6a - DONE |
-| LSTM | Recurrent neural network as ML benchmark | Phase 6b |
+| LSTM | Recurrent neural network as ML benchmark | Phase 6b - DONE |
 | XGBoost | Tree-based reference benchmark; defend why not primary model | Phase 6c |
 | LASSO-MIDAS | Penalise U-MIDAS lag coefficients via glmnet | Phase 7a |
 | PCA on WTI lags | Reduce 12-week lag matrix to PCs; check multicollinearity (VIF) | Phase 7b - DONE |
@@ -175,10 +175,12 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 
 #### 6b — LSTM (recurrent neural network)
 
-- [ ] Implement using torch package in R (or keras)
-- [ ] Input: sequence of 12 weekly WTI log-diffs; output: 1-month-ahead CPI log-diff
-- [ ] Rolling window OOS evaluation on same 2015-2022 test period
-- [ ] Key question: does LSTM beat MIDAS? At what interpretability cost?
+- [x] Implemented using torch package in R; torch backend installed successfully
+- [x] Input: sequence of 12 weekly WTI log-diffs; output: 1-month-ahead CPI log-diff
+- [x] Rolling expanding OOS evaluation on same 2015-2022 test period
+- [x] Best validation setup: hidden size 4, 150 epochs, learning rate 0.010
+- [x] LSTM RMSE 0.02588 (-13.3% vs ARIMAX), MAE 0.01840, directional accuracy 76.0%
+- [x] Key thesis argument: LSTM beats ARIMAX but does not beat MIDAS, XGBoost, U-MIDAS, or Kernel U-MIDAS; in this small mixed-frequency dataset, deep learning adds complexity without improving the main MIDAS result
 
 #### 6c — XGBoost (tree-based tabular reference)
 
@@ -190,7 +192,7 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 #### 6d — Performance vs interpretability table
 
 - [ ] Final table: Model | RMSE | Dir. Accuracy | Params | Interpretable? | Training time
-- [ ] Key point: MIDAS nealmon achieves 80.2% directional accuracy with 4 parameters and full interpretability (lag weights have economic meaning); LSTM achieves TBD with thousands of parameters and no interpretability
+- [ ] Key point: MIDAS nealmon achieves 80.2% directional accuracy with 4 parameters and full interpretability (lag weights have economic meaning); LSTM achieves 76.0% directional accuracy but higher complexity and lower interpretability
 
 ---
 
@@ -308,7 +310,7 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | Phase 4 — Energy benchmarks | Done | nbeta RMSE 0.02057 (-31%), all DM p<0.001 |
 | Phase 5 — CLM-SS | Done | CLM-SS(12) RMSE 0.02258 (-24%); confirms lag hump |
 | Phase 7d — Directional accuracy | Done | nealmon 80.2% dir. acc.; 100% crash recall vs 50% ARIMAX |
-| Phase 6 — ML benchmarks | Partial | Kernel U-MIDAS and XGBoost done; LSTM and interpretability table remain |
+| Phase 6 — ML benchmarks | Partial | Kernel U-MIDAS, XGBoost, and LSTM done; interpretability table remains |
 | Phase 7a — LASSO-MIDAS | Done | RMSE 0.02103; largest lags wti_m1_w2 and wti_m1_w3 confirm hump |
 | Phase 7b — PCA on WTI lags | Done | PCA-ARIMAX only -4.3% vs ARIMAX; MIDAS nbeta remains -31.1% |
 | Phase 7c — Segmented regression | Done | MIDAS wins pre-COVID; XGBoost wins 2020; U-MIDAS wins recovery/spike |
@@ -330,7 +332,7 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | MIDAS nbeta | 0.02057 | -31.1% | 74.0% | 100% | 0.78* | Yes |
 | Kernel U-MIDAS | 0.02226 | -25.5% | 75.0% | 100% | TBD | Yes |
 | XGBoost | 0.02365 | -20.8% | 72.9% | TBD | TBD | Partial |
-| LSTM | TBD | TBD | TBD | TBD | TBD | No |
+| LSTM | 0.02588 | -13.3% | 76.0% | TBD | TBD | No |
 
 *MZ p < 0.05: statistically biased but with high R2 (approx. 0.58). ARIMAX passes MZ only because R2=0.056 (no real predictive power).
 

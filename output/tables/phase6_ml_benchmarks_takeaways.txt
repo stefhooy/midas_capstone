@@ -3,7 +3,7 @@ Phase 6 ML and Non-Parametric Benchmarks - Capstone Takeaways
 Core meaning:
 Phase 6 answers supervisor-facing robustness questions about whether modern
 machine-learning or non-parametric MIDAS methods can beat the main MIDAS
-benchmarks. So far, XGBoost and Kernel U-MIDAS have been implemented.
+benchmarks. XGBoost, Kernel U-MIDAS, and LSTM have now been implemented.
 
 1. XGBoost
 - XGBoost RMSE: 0.02365 (-20.8% vs ARIMAX).
@@ -21,15 +21,28 @@ benchmarks. So far, XGBoost and Kernel U-MIDAS have been implemented.
 - It beats ARIMAX and XGBoost, but remains behind MIDAS nbeta and MIDAS nealmon.
 - The estimated lag weights still peak at prior-month weeks 2-3.
 
+3. LSTM
+- Implemented in R using torch, with the torch backend installed successfully.
+- Input: the same 12 weekly WTI lag sequence used by the MIDAS-style models.
+- Output: one-step-ahead monthly CPI Energy log-change.
+- Best validation setup: hidden size 4, 150 epochs, learning rate 0.010.
+- LSTM RMSE: 0.02588 (-13.3% vs ARIMAX).
+- LSTM MAE: 0.01840.
+- LSTM directional accuracy: 76.0%.
+- LSTM beats ARIMAX, so a recurrent neural network does extract useful signal from weekly WTI timing.
+- LSTM does not beat MIDAS nbeta, MIDAS nealmon, U-MIDAS, Kernel U-MIDAS, or XGBoost.
+- The likely reason is sample size: the capstone has only 275 monthly observations, with 96 rolling test forecasts. That is small for deep learning but acceptable for parsimonious MIDAS lag-shape models.
+- Defense answer: yes, we tried deep learning in R; it improves over a monthly ARIMAX baseline but adds complexity without improving the main MIDAS result.
+
 Main thesis takeaway:
 Trying non-parametric and ML benchmarks strengthens the main capstone result.
-XGBoost and Kernel U-MIDAS both beat ARIMAX, confirming that weekly WTI timing
-contains useful information. However, neither benchmark beats parametric MIDAS.
-Kernel U-MIDAS shows that the data do not require additional smoothness beyond
-U-MIDAS, while XGBoost confirms the lag hump through feature importance. MIDAS
-therefore remains the best balance of accuracy, interpretability, and economic
-lag-structure insight.
+XGBoost, Kernel U-MIDAS, and LSTM all beat ARIMAX, confirming that weekly WTI
+timing contains useful information. However, none of these benchmarks beats
+parametric MIDAS. Kernel U-MIDAS shows that the data do not require additional
+smoothness beyond U-MIDAS, XGBoost confirms the lag hump through feature
+importance, and LSTM shows that a deep recurrent model is not rewarded in this
+small monthly sample. MIDAS therefore remains the best balance of accuracy,
+interpretability, and economic lag-structure insight.
 
 Remaining Phase 6 work:
-- Phase 6b: LSTM benchmark.
 - Phase 6d: final performance vs interpretability table.

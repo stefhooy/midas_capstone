@@ -14,6 +14,7 @@ library(xgboost)
 library(forecast)
 library(xts)
 library(zoo)
+library(torch)
 
 setwd("c:/Users/steve/OneDrive - IE University/Term 3/Research Capstone/midas_capstone")
 dir.create("output/figures", recursive = TRUE, showWarnings = FALSE)
@@ -603,6 +604,295 @@ cat("Tables:  kernel_umidas_lambda_grid.csv | kernel_umidas_weights.csv | kernel
 cat("Data:    data/processed/kernel_umidas_forecasts.rds\n")
 
 # ============================================================
-# PHASE 6b - LSTM              [TO ADD]
-# PHASE 6d - Interpretability  [TO ADD AFTER 6a/6b]
+# PHASE 6b - LSTM benchmark
+# ============================================================
+# Recurrent neural network benchmark requested by DJL.
+# Input sequence: 12 weekly WTI log-diff observations.
+# Output: one-month-ahead CPI Energy log-diff.
+#
+# Important methodological choice:
+# The LSTM uses only the same 12 weekly WTI lags as the MIDAS models.
+# It does not receive extra macro variables. This makes the comparison
+# fair: the question is whether a recurrent neural net can learn the
+# lag-transmission pattern better than MIDAS from the same information.
+# ============================================================
+
+cat("\n============================================================\n")
+cat("PHASE 6b - LSTM\n")
+cat("============================================================\n\n")
+
+cat("LSTM benchmark: 12 weekly WTI lags -> monthly CPI Energy change.\n")
+cat("Small network, full-batch training, fixed hyperparameters selected\n")
+cat("on 2013-2014 validation data to avoid test leakage.\n\n")
+
+torch_manual_seed(42)
+
+lstm_regressor <- nn_module(
+  "lstm_regressor",
+  initialize = function(hidden_size = 8L) {
+    self$lstm <- nn_lstm(input_size = 1L, hidden_size = hidden_size,
+                         batch_first = TRUE)
+    self$fc <- nn_linear(hidden_size, 1L)
+  },
+  forward = function(x) {
+    lstm_out <- self$lstm(x)[[1]]
+    last_out <- lstm_out[, lstm_out$size(2), ]
+    self$fc(last_out)
+  }
+)
+
+fit_lstm_model <- function(X, y, hidden_size = 8L, epochs = 150L,
+                           lr = 0.01, seed = 42L, verbose = FALSE) {
+  ok <- complete.cases(X) & !is.na(y)
+  X <- as.matrix(X[ok, , drop = FALSE])
+  y <- y[ok]
+
+  x_center <- colMeans(X)
+  x_scale  <- apply(X, 2, sd)
+  x_scale[x_scale == 0] <- 1
+  Xs <- scale(X, center = x_center, scale = x_scale)
+
+  y_center <- mean(y)
+  y_scale  <- sd(y)
+  if (is.na(y_scale) || y_scale == 0) y_scale <- 1
+  ys <- (y - y_center) / y_scale
+
+  x_tensor <- torch_tensor(array(as.numeric(Xs),
+                                 dim = c(nrow(Xs), ncol(Xs), 1L)),
+                           dtype = torch_float())
+  y_tensor <- torch_tensor(matrix(ys, ncol = 1L), dtype = torch_float())
+
+  torch_manual_seed(seed)
+  model <- lstm_regressor(hidden_size = hidden_size)
+  optimizer <- optim_adam(model$parameters, lr = lr)
+
+  model$train()
+  loss_last <- NA_real_
+  for (ep in seq_len(epochs)) {
+    optimizer$zero_grad()
+    pred <- model(x_tensor)
+    loss <- nnf_mse_loss(pred, y_tensor)
+    loss$backward()
+    optimizer$step()
+    loss_last <- as.numeric(loss$item())
+    if (verbose && ep %% 50L == 0L)
+      cat(sprintf("    epoch %d/%d loss=%.5f\n", ep, epochs, loss_last))
+  }
+
+  list(model = model,
+       x_center = x_center,
+       x_scale = x_scale,
+       y_center = y_center,
+       y_scale = y_scale,
+       hidden_size = hidden_size,
+       epochs = epochs,
+       lr = lr,
+       loss = loss_last)
+}
+
+predict_lstm_model <- function(fit, X_new) {
+  X_new <- as.matrix(X_new)
+  Xs <- scale(X_new, center = fit$x_center, scale = fit$x_scale)
+  x_tensor <- torch_tensor(array(as.numeric(Xs),
+                                 dim = c(nrow(Xs), ncol(Xs), 1L)),
+                           dtype = torch_float())
+  fit$model$eval()
+  with_no_grad({
+    pred_s <- as.numeric(fit$model(x_tensor))
+  })
+  pred_s * fit$y_scale + fit$y_center
+}
+
+X_lstm <- X_kernel
+ok_lstm <- which(complete.cases(X_lstm))
+
+tune_rows_lstm <- intersect(ok_lstm, which(cpi_dates <= as.Date("2012-12-31")))
+val_rows_lstm  <- intersect(ok_lstm, which(cpi_dates > as.Date("2012-12-31") &
+                                             cpi_dates <= as.Date("2014-12-31")))
+
+cat("=== LSTM hyperparameter selection ===\n")
+
+lstm_grid <- expand.grid(
+  hidden_size = c(4L, 8L),
+  epochs = c(100L, 150L),
+  lr = c(0.005, 0.01)
+)
+
+lstm_tune_tbl <- do.call(rbind, lapply(seq_len(nrow(lstm_grid)), function(j) {
+  cfg <- lstm_grid[j, ]
+  fit_j <- fit_lstm_model(X_lstm[tune_rows_lstm, ], y_all[tune_rows_lstm],
+                          hidden_size = cfg$hidden_size,
+                          epochs = cfg$epochs,
+                          lr = cfg$lr,
+                          seed = 42L)
+  pred_j <- predict_lstm_model(fit_j, X_lstm[val_rows_lstm, ])
+  data.frame(
+    hidden_size = cfg$hidden_size,
+    epochs = cfg$epochs,
+    lr = cfg$lr,
+    Val_RMSE = rmse(y_all[val_rows_lstm] - pred_j),
+    Train_Loss = fit_j$loss,
+    stringsAsFactors = FALSE
+  )
+}))
+
+best_lstm <- lstm_tune_tbl[which.min(lstm_tune_tbl$Val_RMSE), ]
+
+cat(sprintf("Best: hidden=%d | epochs=%d | lr=%.3f | val RMSE=%.5f\n\n",
+            best_lstm$hidden_size, best_lstm$epochs, best_lstm$lr,
+            best_lstm$Val_RMSE))
+
+write.csv(transform(lstm_tune_tbl,
+                    Val_RMSE = round(Val_RMSE, 6),
+                    Train_Loss = round(Train_Loss, 6)),
+          "output/tables/lstm_tuning_grid.csv", row.names = FALSE)
+
+cat("=== LSTM rolling window (expanding, 2015-2022) ===\n")
+
+test_idx_lstm <- which(cpi_dates >= as.Date("2015-01-01"))
+n_test_lstm   <- length(test_idx_lstm)
+fc_lstm       <- rep(NA_real_, n_test_lstm)
+
+t0_lstm <- proc.time()
+
+for (i in seq_len(n_test_lstm)) {
+  te_i <- test_idx_lstm[i]
+  tr_rows <- intersect(ok_lstm, seq_len(te_i - 1L))
+  if (length(tr_rows) < 36L || any(is.na(X_lstm[te_i, ]))) next
+
+  fit_i <- fit_lstm_model(
+    X_lstm[tr_rows, ], y_all[tr_rows],
+    hidden_size = best_lstm$hidden_size,
+    epochs = best_lstm$epochs,
+    lr = best_lstm$lr,
+    seed = 42L + i
+  )
+
+  fc_lstm[i] <- predict_lstm_model(
+    fit_i,
+    matrix(X_lstm[te_i, ], nrow = 1L,
+           dimnames = list(NULL, colnames(X_lstm)))
+  )
+
+  if (i %% 12L == 0L || i == 1L)
+    cat(sprintf("  [%3d/%d] %s  lstm=%+.4f\n",
+                i, n_test_lstm, format(cpi_dates[te_i], "%Y-%m"),
+                fc_lstm[i]))
+}
+
+elapsed_lstm <- round((proc.time() - t0_lstm)["elapsed"], 1)
+cat("\nLSTM rolling window complete in", elapsed_lstm, "seconds.\n\n")
+
+y_actual_lstm <- y_all[test_idx_lstm]
+e_lstm <- y_actual_lstm - fc_lstm
+lstm_rmse <- rmse(e_lstm)
+
+lstm_results <- data.frame(
+  Model = c("ARIMAX", "MIDAS nbeta", "MIDAS nealmon",
+            "U-MIDAS", "Kernel U-MIDAS", "XGBoost", "LSTM"),
+  RMSE = round(c(arimax_rmse_k, nbeta_rmse_k, nealmon_rmse_k,
+                 umidas_rmse_k, kernel_rmse_k, xgb_rmse_k, lstm_rmse), 6),
+  MAE = round(c(mae(ph4$y_actual - ph4$fc_arimax),
+                mae(ph4$y_actual - ph4$fc_nbeta),
+                mae(ph4$y_actual - ph4$fc_nealmon),
+                mae(ph4$y_actual - ph4$fc_umidas),
+                mae(e_kernel),
+                mae(e_xgb),
+                mae(e_lstm)), 6),
+  Dir_Acc_pct = c(dir_acc(ph4$fc_arimax, ph4$y_actual),
+                  dir_acc(ph4$fc_nbeta, ph4$y_actual),
+                  dir_acc(ph4$fc_nealmon, ph4$y_actual),
+                  dir_acc(ph4$fc_umidas, ph4$y_actual),
+                  dir_acc(fc_kernel, y_actual_k),
+                  dir_acc(fc_xgb, y_actual),
+                  dir_acc(fc_lstm, y_actual_lstm)),
+  vs_ARIMAX_pct = round(c(0,
+                          100 * (nbeta_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (nealmon_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (umidas_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (kernel_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (xgb_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (lstm_rmse - arimax_rmse_k) / arimax_rmse_k),
+                        1),
+  Complexity = c("Monthly average", "3 lag-shape params",
+                 "3 lag-shape params", "12 free lags",
+                 "12 lags + smoothness penalty", "Tree ensemble",
+                 paste0("LSTM hidden=", best_lstm$hidden_size)),
+  Interpretable = c("Low", "High", "High", "Partial",
+                    "High", "Medium", "Low"),
+  stringsAsFactors = FALSE
+)
+
+cat("=== LSTM vs benchmark models ===\n")
+print(lstm_results, row.names = FALSE)
+
+write.csv(lstm_results, "output/tables/lstm_results.csv",
+          row.names = FALSE)
+
+saveRDS(list(
+  fc_lstm = fc_lstm,
+  y_actual = y_actual_lstm,
+  test_dates = cpi_dates[test_idx_lstm],
+  best_params = list(hidden_size = best_lstm$hidden_size,
+                     epochs = best_lstm$epochs,
+                     lr = best_lstm$lr),
+  tuning_grid = lstm_tune_tbl
+), "data/processed/lstm_forecasts.rds")
+
+render(function() {
+  ylim <- range(c(y_actual_lstm, fc_lstm, ph4$fc_nbeta, ph4$fc_arimax),
+                na.rm = TRUE)
+  par(mar = c(4, 4.5, 4, 1))
+  plot(cpi_dates[test_idx_lstm], y_actual_lstm, type = "l",
+       col = "black", lwd = 2.1, ylim = ylim,
+       main = "LSTM Forecasts vs MIDAS and ARIMAX",
+       sub = sprintf("LSTM RMSE = %.5f | nbeta RMSE = %.5f | ARIMAX RMSE = %.5f",
+                     lstm_rmse, nbeta_rmse_k, arimax_rmse_k),
+       xlab = "", ylab = "Monthly log-change in CPI Energy")
+  lines(cpi_dates[test_idx_lstm], ph4$fc_arimax,
+        col = "tomato", lwd = 1.3, lty = 2)
+  lines(cpi_dates[test_idx_lstm], fc_lstm,
+        col = "darkorchid4", lwd = 1.5, lty = 1)
+  lines(cpi_dates[test_idx_lstm], ph4$fc_nbeta,
+        col = "forestgreen", lwd = 1.5, lty = 3)
+  abline(h = 0, col = "grey60", lty = 2, lwd = 0.8)
+  legend("bottomleft", bty = "n", cex = 0.82,
+         lwd = c(2.1, 1.3, 1.5, 1.5),
+         lty = c(1, 2, 1, 3),
+         col = c("black", "tomato", "darkorchid4", "forestgreen"),
+         legend = c("Actual",
+                    paste0("ARIMAX (RMSE=", round(arimax_rmse_k, 4), ")"),
+                    paste0("LSTM (RMSE=", round(lstm_rmse, 4), ")"),
+                    paste0("MIDAS nbeta (RMSE=", round(nbeta_rmse_k, 4), ")")))
+}, "output/figures/32_lstm_forecasts.png", 12, 5)
+
+render(function() {
+  plot_tbl <- lstm_results[order(lstm_results$RMSE, decreasing = TRUE), ]
+  cols <- ifelse(plot_tbl$Model == "LSTM", "darkorchid4",
+           ifelse(grepl("MIDAS", plot_tbl$Model), "steelblue",
+           ifelse(plot_tbl$Model == "ARIMAX", "tomato", "grey65")))
+  par(mar = c(4, 8, 4, 1))
+  bp <- barplot(plot_tbl$RMSE, names.arg = plot_tbl$Model,
+                horiz = TRUE, las = 1,
+                col = cols, border = "white",
+                main = "LSTM vs Mixed-Frequency Benchmarks",
+                sub = "Lower RMSE is better; all models evaluated on 2015-2022 rolling window",
+                xlab = "RMSE")
+  text(plot_tbl$RMSE + 0.0006, bp,
+       labels = sprintf("%.5f", plot_tbl$RMSE),
+       cex = 0.75, adj = 0)
+}, "output/figures/33_lstm_rmse_comparison.png", 10, 5)
+
+cat("\n=== Phase 6b complete ===\n")
+cat(sprintf("  LSTM RMSE: %.5f (%+.1f%% vs ARIMAX)\n",
+            lstm_rmse, 100 * (lstm_rmse - arimax_rmse_k) / arimax_rmse_k))
+cat(sprintf("  Best params: hidden=%d | epochs=%d | lr=%.3f | Dir. Acc.: %.1f%%\n",
+            best_lstm$hidden_size, best_lstm$epochs, best_lstm$lr,
+            dir_acc(fc_lstm, y_actual_lstm)))
+cat("Figures: 32_lstm_forecasts.png | 33_lstm_rmse_comparison.png\n")
+cat("Tables:  lstm_tuning_grid.csv | lstm_results.csv\n")
+cat("Data:    data/processed/lstm_forecasts.rds\n")
+
+# ============================================================
+# PHASE 6d - Interpretability  [TO ADD]
 # ============================================================
