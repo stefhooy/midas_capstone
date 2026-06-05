@@ -36,14 +36,14 @@
 | --- | --- | --- |
 | Kernel U-MIDAS | Non-parametric smoother on lag weights (Breitung and Roling 2015) | Phase 6a - DONE |
 | LSTM | Recurrent neural network as ML benchmark | Phase 6b - DONE |
-| XGBoost | Tree-based reference benchmark; defend why not primary model | Phase 6c |
+| XGBoost | Tree-based reference benchmark; defend why not primary model | Phase 6c - DONE |
 | LASSO-MIDAS | Penalise U-MIDAS lag coefficients via glmnet | Phase 7a |
 | PCA on WTI lags | Reduce 12-week lag matrix to PCs; check multicollinearity (VIF) | Phase 7b - DONE |
 | Segmented regression | Structural break analysis: 2008, 2014, COVID | Phase 7c - DONE |
 | Directional accuracy | Sign-correct %, precision/recall, Mincer-Zarnowitz | Phase 7d — DONE |
 | Energy/oil literature | Hamilton, Kilian, Baumeister domain refs | Phase 1 — DONE |
 | Forecast horizon validity | How far ahead is oil-CPI prediction valid? Based on oil literature | Phase 7e - DONE |
-| Interpretability table | RMSE vs complexity vs interpretability trade-off table | Phase 8 |
+| Interpretability table | RMSE vs complexity vs interpretability trade-off table | Phase 6d - DONE |
 
 ---
 
@@ -137,6 +137,7 @@ midas_capstone/
 - [x] Lag selection: k=3/7/11 AIC grid, k=11 optimal (3 months of weekly data)
 - [x] Rolling window: expanding, train 2000-2014, test 2015-2022 (96 forecasts)
 - [x] Phase 4 forecast vectors saved to data/processed/phase4_forecasts.rds
+- [x] Final in-sample IC table: MIDAS nbeta has best AIC (-1258.00) and BIC (-1239.96) among likelihood-based final models
 
 **Key finding:** Lag weight hump peaks at lag 5-6 (approx. 6 weeks) confirming crude oil transmission delay to consumer prices. nbeta wins because it freely approximates the hump; nealmon is constrained to monotone decay.
 
@@ -159,7 +160,7 @@ midas_capstone/
 
 ---
 
-### Phase 6 — ML Benchmark Comparison (partially done)
+### Phase 6 — ML Benchmark Comparison (done)
 
 *Script: 10_ml_benchmarks.R. Answers DJL requests for ML comparison.*
 
@@ -191,8 +192,9 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 
 #### 6d — Performance vs interpretability table
 
-- [ ] Final table: Model | RMSE | Dir. Accuracy | Params | Interpretable? | Training time
-- [ ] Key point: MIDAS nealmon achieves 80.2% directional accuracy with 4 parameters and full interpretability (lag weights have economic meaning); LSTM achieves 76.0% directional accuracy but higher complexity and lower interpretability
+- [x] Final table saved: Model | RMSE | Dir. Accuracy | Complexity | Interpretable? | Capstone role
+- [x] Output files: performance_interpretability_table.csv, performance_interpretability_table.md, phase6d_interpretability_summary.txt
+- [x] Key point: MIDAS nbeta is the best RMSE model; MIDAS nealmon is the best directional and clearest defense model; XGBoost and LSTM both beat ARIMAX but neither beats parametric MIDAS
 
 ---
 
@@ -215,6 +217,7 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 - [x] Run PCA and scree plot: 11 PCs needed to explain 95% of variance, meaning weekly WTI shocks are not easily compressed into a few components
 - [x] PCA-ARIMAX benchmark with first 4 PCs: RMSE 0.02859 (-4.3% vs ARIMAX), far worse than MIDAS nbeta RMSE 0.02057 (-31.1%)
 - [x] Key thesis argument: compression alone is not enough; preserving the weekly timing structure is what gives MIDAS its advantage
+- [x] PCA choice: 11 PCs are needed for 95.3% variance, but the diagnostic benchmark uses 4 PCs to test whether low-dimensional compression can compete; using 11 PCs would nearly reconstruct the original lag matrix and defeat the purpose of PCA
 
 #### 7c — Segmented regression: structural breaks (done)
 
@@ -244,6 +247,15 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 - [x] **Rolling subperiod analysis**: yearly RMSE table saved; COVID/recovery years shown explicitly in figure 22.
 - [x] **Summary for thesis discussion**: this is primarily a one-month nowcasting study; the lag hump around prior-month weeks 2-3 is the interpretable transmission mechanism.
 
+#### Final evaluation addendum — AIC/BIC, MASE, MAPE (done)
+
+- [x] Script saved: R/12_final_evaluation.R
+- [x] AIC/BIC table saved: output/tables/final_insample_aic_bic.csv
+- [x] OOS metrics table saved: output/tables/final_oos_forecast_metrics.csv and .md
+- [x] Added MASE and sMAPE alongside RMSE, MAE, MAPE, and directional accuracy
+- [x] MAPE caveat: raw MAPE is unstable for monthly log-changes because actual values can be close to zero; use RMSE, MAE, MASE, sMAPE, and directional accuracy as the defensible forecast metrics
+- [x] Test period confirmed: January 2015 to December 2022, 96 one-step-ahead/nowcast forecasts; initial training window is February 2000 to December 2014 and expands monthly
+
 ---
 
 ### Phase 8 — Written Thesis (due 29 June, max 30 pages)
@@ -256,12 +268,12 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
   - [ ] Data: CPIENGSL, DCOILWTICO, PNRGINDEXM; FRED sources; sample; log-diff transformation
   - [ ] Benchmark models: ARIMAX, nealmon, nbeta, U-MIDAS with equations
   - [ ] CLM-SS formulation: Z matrix, AR(1) state, MLE via BFGS, identifiability
-  - [ ] Evaluation: expanding window, RMSE, MAE, DM test, directional accuracy, MZ test
+  - [ ] Evaluation: expanding window, RMSE, MAE, MASE, sMAPE, DM test, directional accuracy, MZ test; MAPE reported with caveat
 - [ ] Chapter 4 — Results (4-5 pages):
-  - [ ] Table 1: In-sample AIC/BIC/RMSE for all models (Phase 4)
-  - [ ] Table 2: OOS RMSE, MAE, directional accuracy, DM p-values (Phases 4+5+7d)
+  - [x] Table 1: In-sample AIC/BIC/RMSE generated for applicable models
+  - [x] Table 2: OOS RMSE, MAE, MASE, MAPE/sMAPE, directional accuracy generated
   - [ ] Table 3: Large-move precision and recall (Phase 7d)
-  - [ ] Table 4: Performance vs interpretability trade-off (Phase 6d)
+  - [x] Table 4: Performance vs interpretability trade-off generated (Phase 6d)
   - [ ] Figure: CLM-SS composite link weights bar chart
   - [ ] Figure: MIDAS lag weight hump (nealmon vs nbeta)
   - [ ] Figure: OOS forecast comparison line chart
@@ -310,11 +322,12 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | Phase 4 — Energy benchmarks | Done | nbeta RMSE 0.02057 (-31%), all DM p<0.001 |
 | Phase 5 — CLM-SS | Done | CLM-SS(12) RMSE 0.02258 (-24%); confirms lag hump |
 | Phase 7d — Directional accuracy | Done | nealmon 80.2% dir. acc.; 100% crash recall vs 50% ARIMAX |
-| Phase 6 — ML benchmarks | Partial | Kernel U-MIDAS, XGBoost, and LSTM done; interpretability table remains |
+| Phase 6 — ML benchmarks | Done | Kernel U-MIDAS, XGBoost, LSTM, and interpretability table complete |
 | Phase 7a — LASSO-MIDAS | Done | RMSE 0.02103; largest lags wti_m1_w2 and wti_m1_w3 confirm hump |
 | Phase 7b — PCA on WTI lags | Done | PCA-ARIMAX only -4.3% vs ARIMAX; MIDAS nbeta remains -31.1% |
 | Phase 7c — Segmented regression | Done | MIDAS wins pre-COVID; XGBoost wins 2020; U-MIDAS wins recovery/spike |
 | Phase 7e — Forecast horizon validity | Done | h=1 main window (-31.1%); h=2 useful (-14.9%); h=3 fades (+2.2%) |
+| Final evaluation addendum | Done | MIDAS nbeta wins AIC/BIC and OOS RMSE/MASE; MAPE reported but de-emphasized |
 | Phase 8 — Thesis writing | To do | Due 29 June 2026, 30 pages |
 | Phase 9 — Poster | To do | Due 29 June 2026, A0 PDF |
 | Phase 10 — Code cleanup | To do | |

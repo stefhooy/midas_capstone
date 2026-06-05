@@ -894,5 +894,178 @@ cat("Tables:  lstm_tuning_grid.csv | lstm_results.csv\n")
 cat("Data:    data/processed/lstm_forecasts.rds\n")
 
 # ============================================================
-# PHASE 6d - Interpretability  [TO ADD]
+# PHASE 6d - Performance vs interpretability table
 # ============================================================
+
+# This table combines Phase 4/5/6/7 results into one defense-facing
+# comparison. LASSO-MIDAS and CLM-SS values come from 11_extended_models.R
+# and 07_clm_ss.R respectively; all other values are available in this script.
+phase6d_tbl <- data.frame(
+  Model = c("ARIMAX",
+            "MIDAS nbeta",
+            "MIDAS nealmon",
+            "U-MIDAS",
+            "CLM-SS (12 lags)",
+            "LASSO-MIDAS",
+            "Kernel U-MIDAS",
+            "XGBoost",
+            "LSTM"),
+  Family = c("Monthly benchmark",
+             "Parametric MIDAS",
+             "Parametric MIDAS",
+             "Unrestricted MIDAS",
+             "State-space MIDAS-style",
+             "Regularised MIDAS",
+             "Non-parametric MIDAS",
+             "Machine learning",
+             "Machine learning"),
+  RMSE = round(c(arimax_rmse_k,
+                 nbeta_rmse_k,
+                 nealmon_rmse_k,
+                 umidas_rmse_k,
+                 0.022579,
+                 0.021030,
+                 kernel_rmse_k,
+                 xgb_rmse_k,
+                 lstm_rmse), 5),
+  vs_ARIMAX_pct = round(c(0,
+                          100 * (nbeta_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (nealmon_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (umidas_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          -24.4,
+                          -29.6,
+                          100 * (kernel_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (xgb_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (lstm_rmse - arimax_rmse_k) / arimax_rmse_k),
+                        1),
+  Dir_Acc_pct = c(64.6, 74.0, 80.2, 75.0, 74.0, 76.0,
+                  dir_acc(fc_kernel, y_actual_k),
+                  dir_acc(fc_xgb, y_actual),
+                  dir_acc(fc_lstm, y_actual_lstm)),
+  Parameters_or_complexity = c("ARMA + monthly mean WTI",
+                               "3 lag-shape parameters",
+                               "3 lag-shape parameters",
+                               "12 free weekly coefficients",
+                               "12 link weights + AR(1) state",
+                               "11 nonzero weekly coefficients",
+                               "12 lags + smoothness penalty",
+                               "Tree ensemble over 14 features",
+                               paste0("LSTM hidden=", best_lstm$hidden_size,
+                                      ", epochs=", best_lstm$epochs)),
+  Weekly_timing_use = c("Aggregates WTI to monthly mean",
+                        "Smooth beta lag curve over 12 weekly lags",
+                        "Smooth Almon lag curve over 12 weekly lags",
+                        "Free coefficient for each weekly lag",
+                        "Exact weekly link weights plus AR error",
+                        "Sparse weekly lag selection",
+                        "Smooth non-parametric weekly lag curve",
+                        "Tabular weekly lag features",
+                        "Sequential 12-week WTI input"),
+  Training_burden = c("Low", "Low", "Low", "Low",
+                      "Medium", "Medium", "Low-medium",
+                      "Medium", "High"),
+  Interpretability = c("Medium",
+                       "High",
+                       "High",
+                       "Medium",
+                       "High",
+                       "Medium-high",
+                       "High",
+                       "Medium-low",
+                       "Low"),
+  Capstone_role = c("Baseline to beat",
+                    "Best RMSE model",
+                    "Best directional model",
+                    "Flexible MIDAS benchmark",
+                    "Novel exact aggregation framework",
+                    "Feature-selection robustness",
+                    "Non-parametric smoother robustness",
+                    "Tree-based ML benchmark",
+                    "Deep-learning benchmark"),
+  Thesis_takeaway = c("Monthly pre-aggregation loses weekly timing.",
+                      "Best overall accuracy; strongest main result.",
+                      "Best sign accuracy and easiest defense model.",
+                      "Weekly timing matters even without shape restrictions.",
+                      "Confirms lag hump but does not beat parametric MIDAS.",
+                      "Independently selects the prior-month lag window.",
+                      "Validation chooses no extra smoothing; U-MIDAS is enough.",
+                      "Beats ARIMAX but trails MIDAS; confirms lag hump.",
+                      "Beats ARIMAX but complexity is not rewarded."),
+  stringsAsFactors = FALSE
+)
+
+phase6d_tbl <- phase6d_tbl[order(phase6d_tbl$RMSE), ]
+phase6d_tbl$RMSE_rank <- seq_len(nrow(phase6d_tbl))
+phase6d_tbl <- phase6d_tbl[, c("RMSE_rank",
+                               setdiff(names(phase6d_tbl), "RMSE_rank"))]
+
+write.csv(phase6d_tbl,
+          "output/tables/performance_interpretability_table.csv",
+          row.names = FALSE)
+
+fmt_vs <- function(x) ifelse(x == 0, "baseline", sprintf("%+.1f%%", x))
+
+md_lines <- c(
+  "# Phase 6d Performance vs Interpretability Table",
+  "",
+  "| Rank | Model | RMSE | vs ARIMAX | Dir. Acc. | Complexity | Interpretability | Capstone role |",
+  "| ---: | --- | ---: | ---: | ---: | --- | --- | --- |"
+)
+
+for (i in seq_len(nrow(phase6d_tbl))) {
+  md_lines <- c(md_lines, sprintf(
+    "| %d | %s | %.5f | %s | %.1f%% | %s | %s | %s |",
+    phase6d_tbl$RMSE_rank[i],
+    phase6d_tbl$Model[i],
+    phase6d_tbl$RMSE[i],
+    fmt_vs(phase6d_tbl$vs_ARIMAX_pct[i]),
+    phase6d_tbl$Dir_Acc_pct[i],
+    phase6d_tbl$Parameters_or_complexity[i],
+    phase6d_tbl$Interpretability[i],
+    phase6d_tbl$Capstone_role[i]
+  ))
+}
+
+md_lines <- c(
+  md_lines,
+  "",
+  "Main interpretation:",
+  "",
+  "- MIDAS nbeta is the best RMSE model.",
+  "- MIDAS nealmon is the best directional model and the clearest defense model.",
+  "- Every serious weekly-timing model beats ARIMAX except the lag-limited CLM-SS(4), which is excluded from this final comparison.",
+  "- XGBoost and LSTM both beat ARIMAX, but neither beats parametric MIDAS.",
+  "- The capstone result is therefore not just about prediction accuracy; it is about accuracy plus an interpretable 5-7 week WTI-to-CPI transmission window."
+)
+
+writeLines(md_lines,
+           "output/tables/performance_interpretability_table.md")
+
+summary_lines <- c(
+  "Phase 6d - Performance vs Interpretability Takeaways",
+  "",
+  "Best RMSE: MIDAS nbeta, RMSE 0.02057 (-31.1% vs ARIMAX).",
+  "Best directional accuracy: MIDAS nealmon, 80.2%.",
+  "Best accuracy/interpretable trade-off: parametric MIDAS, especially nbeta and nealmon.",
+  "",
+  "Machine-learning conclusion:",
+  "XGBoost and LSTM both beat the monthly ARIMAX baseline, so weekly WTI timing contains real signal.",
+  "However, neither ML model beats MIDAS. XGBoost reaches RMSE 0.02365 and LSTM reaches RMSE 0.02588, while MIDAS nbeta reaches 0.02057.",
+  "This is defense-useful because it shows that modern ML was tested, but the small monthly sample rewards parsimonious lag-shape models.",
+  "",
+  "MIDAS conclusion:",
+  "MIDAS is not only accurate; it explains where the predictive information sits.",
+  "Across MIDAS, CLM-SS, LASSO-MIDAS, XGBoost, and Kernel U-MIDAS, the useful signal repeatedly appears in prior-month WTI weeks 2-3, implying a 5-7 week oil-to-consumer-energy-price transmission window.",
+  "",
+  "Final thesis sentence:",
+  "The best model is not the most complex model; it is the model that preserves weekly timing while imposing enough structure to remain stable and interpretable in a small monthly macro-energy sample."
+)
+
+writeLines(summary_lines,
+           "output/tables/phase6d_interpretability_summary.txt")
+
+cat("\n=== Phase 6d complete ===\n")
+cat("Best RMSE model:", phase6d_tbl$Model[1],
+    "| RMSE =", sprintf("%.5f", phase6d_tbl$RMSE[1]), "\n")
+cat("Tables: performance_interpretability_table.csv | performance_interpretability_table.md\n")
+cat("Summary: phase6d_interpretability_summary.txt\n")

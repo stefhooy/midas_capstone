@@ -1,0 +1,24 @@
+Final Evaluation Addendum - AIC/BIC, MASE, MAPE, and PCA Choice
+
+Forecast-performance dataset:
+- Outcome: monthly log-change in US Consumer Energy CPI (CPIENGSL).
+- Predictor: weekly log-change in WTI crude oil spot price (DCOILWTICO), converted to exactly 4 weekly observations per CPI month.
+- Sample: 2000-02 to 2022-12.
+- Rolling forecast test period: 2015-01 to 2022-12, 96 one-step-ahead forecasts.
+- Initial training period: 2000-02 to 2014-12; the window expands one month at a time.
+
+AIC/BIC:
+- AIC/BIC are valid for likelihood-based statistical models, not for XGBoost or LSTM.
+- Use AIC/BIC as in-sample fit/parsimony evidence, not as the main forecast-performance result.
+- The main forecast claim should still be based on OOS rolling metrics.
+
+MAPE:
+- Raw MAPE is reported because it was requested, but it should not be emphasized.
+- The dependent variable is a log-change that often lies near zero, so dividing by the actual value can make MAPE unstable.
+- MASE and sMAPE are more defensible scale-free metrics here.
+
+PCA choice:
+- The scree table shows 11 PCs are needed to explain 95.3% of the 12 weekly WTI lag variance.
+- For the diagnostic PCA-ARIMAX benchmark, using 4 PCs is appropriate because it tests whether a low-dimensional compression can compete with MIDAS.
+- It cannot: PCA-ARIMAX RMSE is 0.02859, only -4.3% vs ARIMAX, far worse than MIDAS nbeta at 0.02057.
+- Therefore we should not use 11 PCs as the main PCA benchmark; 11 PCs nearly reconstruct the original 12 lags and defeats the purpose of PCA compression.

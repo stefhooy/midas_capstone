@@ -1,0 +1,17 @@
+Phase 6d - Performance vs Interpretability Takeaways
+
+Best RMSE: MIDAS nbeta, RMSE 0.02057 (-31.1% vs ARIMAX).
+Best directional accuracy: MIDAS nealmon, 80.2%.
+Best accuracy/interpretable trade-off: parametric MIDAS, especially nbeta and nealmon.
+
+Machine-learning conclusion:
+XGBoost and LSTM both beat the monthly ARIMAX baseline, so weekly WTI timing contains real signal.
+However, neither ML model beats MIDAS. XGBoost reaches RMSE 0.02365 and LSTM reaches RMSE 0.02588, while MIDAS nbeta reaches 0.02057.
+This is defense-useful because it shows that modern ML was tested, but the small monthly sample rewards parsimonious lag-shape models.
+
+MIDAS conclusion:
+MIDAS is not only accurate; it explains where the predictive information sits.
+Across MIDAS, CLM-SS, LASSO-MIDAS, XGBoost, and Kernel U-MIDAS, the useful signal repeatedly appears in prior-month WTI weeks 2-3, implying a 5-7 week oil-to-consumer-energy-price transmission window.
+
+Final thesis sentence:
+The best model is not the most complex model; it is the model that preserves weekly timing while imposing enough structure to remain stable and interpretable in a small monthly macro-energy sample.

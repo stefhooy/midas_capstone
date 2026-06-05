@@ -34,6 +34,15 @@ benchmarks. XGBoost, Kernel U-MIDAS, and LSTM have now been implemented.
 - The likely reason is sample size: the capstone has only 275 monthly observations, with 96 rolling test forecasts. That is small for deep learning but acceptable for parsimonious MIDAS lag-shape models.
 - Defense answer: yes, we tried deep learning in R; it improves over a monthly ARIMAX baseline but adds complexity without improving the main MIDAS result.
 
+4. Performance vs interpretability table
+- Final table saved to output/tables/performance_interpretability_table.csv and .md.
+- Best RMSE: MIDAS nbeta, RMSE 0.02057 (-31.1% vs ARIMAX).
+- Best directional accuracy: MIDAS nealmon, 80.2%.
+- Best accuracy/interpretable trade-off: parametric MIDAS, especially nbeta and nealmon.
+- LASSO-MIDAS is almost tied with MIDAS nealmon and independently selects the same prior-month lag window.
+- XGBoost and LSTM both beat ARIMAX, but neither beats parametric MIDAS.
+- Final defense line: the best model is not the most complex model; it is the model that preserves weekly timing while imposing enough structure to remain stable and interpretable in a small monthly macro-energy sample.
+
 Main thesis takeaway:
 Trying non-parametric and ML benchmarks strengthens the main capstone result.
 XGBoost, Kernel U-MIDAS, and LSTM all beat ARIMAX, confirming that weekly WTI
@@ -45,4 +54,4 @@ small monthly sample. MIDAS therefore remains the best balance of accuracy,
 interpretability, and economic lag-structure insight.
 
 Remaining Phase 6 work:
-- Phase 6d: final performance vs interpretability table.
+- None. Phase 6 is complete.
