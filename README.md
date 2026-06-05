@@ -34,7 +34,7 @@
 
 | Request | What DJL asked | Status |
 | --- | --- | --- |
-| Kernel U-MIDAS | Non-parametric smoother on lag weights (Breitung and Roling 2015) | Phase 6a |
+| Kernel U-MIDAS | Non-parametric smoother on lag weights (Breitung and Roling 2015) | Phase 6a - DONE |
 | LSTM | Recurrent neural network as ML benchmark | Phase 6b |
 | XGBoost | Tree-based reference benchmark; defend why not primary model | Phase 6c |
 | LASSO-MIDAS | Penalise U-MIDAS lag coefficients via glmnet | Phase 7a |
@@ -159,17 +159,19 @@ midas_capstone/
 
 ---
 
-### Phase 6 — ML Benchmark Comparison (to do)
+### Phase 6 — ML Benchmark Comparison (partially done)
 
 *Script: 10_ml_benchmarks.R. Answers DJL requests for ML comparison.*
 
 Note: The original Phase 6 (Simulation Study) has been replaced by this ML benchmark phase per DJL feedback. A simulation study is out of scope for the June 29 deadline.
 
-#### 6a — Kernel U-MIDAS (non-parametric smoother)
+#### 6a — Kernel U-MIDAS (non-parametric smoother, done)
 
-- [ ] Implement Breitung and Roling (2015) penalised least-squares smoother on lag weights
-- [ ] Compare estimated weight shape to nealmon/nbeta: does kernel recover the hump without parametric assumption?
-- [ ] Compare OOS RMSE to free U-MIDAS and parametric MIDAS in the standard comparison table
+- [x] Implemented a Breitung and Roling-style penalised least-squares smoother on 12 weekly lag weights using a second-difference roughness penalty
+- [x] Lambda selected on 2013-2014 validation window; best lambda = 0, so the smoother collapses to unrestricted U-MIDAS
+- [x] Kernel U-MIDAS RMSE 0.02226 (-25.5% vs ARIMAX), identical to U-MIDAS and behind MIDAS nbeta 0.02057 (-31.1%)
+- [x] Estimated weights still peak at prior-month weeks 2-3, confirming the lag hump without a parametric nealmon/nbeta shape
+- [x] Key thesis argument: non-parametric smoothing does not improve over U-MIDAS here; flexible weekly timing helps, but parametric MIDAS remains more accurate and interpretable
 
 #### 6b — LSTM (recurrent neural network)
 
@@ -306,7 +308,7 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | Phase 4 — Energy benchmarks | Done | nbeta RMSE 0.02057 (-31%), all DM p<0.001 |
 | Phase 5 — CLM-SS | Done | CLM-SS(12) RMSE 0.02258 (-24%); confirms lag hump |
 | Phase 7d — Directional accuracy | Done | nealmon 80.2% dir. acc.; 100% crash recall vs 50% ARIMAX |
-| Phase 6 — ML benchmarks | To do | XGBoost, LSTM, Kernel U-MIDAS, interpretability table |
+| Phase 6 — ML benchmarks | Partial | Kernel U-MIDAS and XGBoost done; LSTM and interpretability table remain |
 | Phase 7a — LASSO-MIDAS | Done | RMSE 0.02103; largest lags wti_m1_w2 and wti_m1_w3 confirm hump |
 | Phase 7b — PCA on WTI lags | Done | PCA-ARIMAX only -4.3% vs ARIMAX; MIDAS nbeta remains -31.1% |
 | Phase 7c — Segmented regression | Done | MIDAS wins pre-COVID; XGBoost wins 2020; U-MIDAS wins recovery/spike |
@@ -326,7 +328,8 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | CLM-SS (12 lags) | 0.02258 | -24.4% | 74.0% | 100% | 0.70* | Yes |
 | MIDAS nealmon | 0.02104 | -29.5% | 80.2% | 100% | 0.75* | Yes |
 | MIDAS nbeta | 0.02057 | -31.1% | 74.0% | 100% | 0.78* | Yes |
-| XGBoost | TBD | TBD | TBD | TBD | TBD | Partial |
+| Kernel U-MIDAS | 0.02226 | -25.5% | 75.0% | 100% | TBD | Yes |
+| XGBoost | 0.02365 | -20.8% | 72.9% | TBD | TBD | Partial |
 | LSTM | TBD | TBD | TBD | TBD | TBD | No |
 
 *MZ p < 0.05: statistically biased but with high R2 (approx. 0.58). ARIMAX passes MZ only because R2=0.056 (no real predictive power).

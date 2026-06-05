@@ -1,0 +1,35 @@
+Phase 6 ML and Non-Parametric Benchmarks - Capstone Takeaways
+
+Core meaning:
+Phase 6 answers supervisor-facing robustness questions about whether modern
+machine-learning or non-parametric MIDAS methods can beat the main MIDAS
+benchmarks. So far, XGBoost and Kernel U-MIDAS have been implemented.
+
+1. XGBoost
+- XGBoost RMSE: 0.02365 (-20.8% vs ARIMAX).
+- Directional accuracy: 72.9%.
+- XGBoost beats ARIMAX, so nonlinear machine learning does add value.
+- XGBoost does not beat MIDAS nbeta (0.02057) or MIDAS nealmon (0.02104).
+- Feature importance ranks prior-month WTI weeks 2-3 among the most important predictors, confirming the same 5-7 week transmission window found by MIDAS, CLM-SS, and LASSO-MIDAS.
+
+2. Kernel U-MIDAS
+- Implemented as a smooth non-parametric lag-weight model using a second-difference roughness penalty on the 12 weekly WTI lag coefficients.
+- Lambda was selected on the 2013-2014 validation window.
+- Best lambda: 0.000000, so validation chose no smoothing.
+- Kernel U-MIDAS therefore collapses to unrestricted U-MIDAS in this dataset.
+- Kernel U-MIDAS RMSE: 0.02226 (-25.5% vs ARIMAX), identical to U-MIDAS.
+- It beats ARIMAX and XGBoost, but remains behind MIDAS nbeta and MIDAS nealmon.
+- The estimated lag weights still peak at prior-month weeks 2-3.
+
+Main thesis takeaway:
+Trying non-parametric and ML benchmarks strengthens the main capstone result.
+XGBoost and Kernel U-MIDAS both beat ARIMAX, confirming that weekly WTI timing
+contains useful information. However, neither benchmark beats parametric MIDAS.
+Kernel U-MIDAS shows that the data do not require additional smoothness beyond
+U-MIDAS, while XGBoost confirms the lag hump through feature importance. MIDAS
+therefore remains the best balance of accuracy, interpretability, and economic
+lag-structure insight.
+
+Remaining Phase 6 work:
+- Phase 6b: LSTM benchmark.
+- Phase 6d: final performance vs interpretability table.

@@ -262,7 +262,10 @@ cat("  lag hump (peak at prior-month weeks 2-3 = lag 5-6 in MIDAS notation)\n\n"
 # STEP 7 — Plots
 # ============================================================
 render <- function(plot_fn, file, w, h) {
-  dev.new(); plot_fn()
+  if (interactive()) {
+    dev.new()
+    plot_fn()
+  }
   png(file, width = w, height = h, units = "in", res = 300)
   plot_fn(); invisible(dev.off())
   cat("Saved:", file, "\n")
@@ -333,7 +336,273 @@ cat("Tables:  xgb_feature_importance.csv\n")
 cat("Data:    data/processed/xgb_forecasts.rds\n")
 
 # ============================================================
-# PHASE 6a — Kernel U-MIDAS   [TO ADD]
-# PHASE 6b — LSTM              [TO ADD]
-# PHASE 6d — Interpretability  [TO ADD AFTER 6a/6b]
+# PHASE 6a - Kernel U-MIDAS
+# ============================================================
+# Non-parametric MIDAS benchmark inspired by Breitung and Roling
+# (2015): estimate 12 unrestricted weekly lag coefficients, but
+# penalise roughness in the lag curve.
+#
+# Objective:
+#   min_beta sum_t (y_t - alpha - X_t beta)^2
+#            + lambda * ||D2 beta||^2
+#
+# D2 is the second-difference matrix, so the penalty encourages a
+# smooth lag-weight curve without forcing a nealmon or nbeta shape.
+# This answers DJL's "kernel/non-parametric MIDAS" request while
+# keeping the implementation reproducible in base R.
+# ============================================================
+
+cat("\n============================================================\n")
+cat("PHASE 6a - Kernel U-MIDAS\n")
+cat("============================================================\n\n")
+
+cat("Kernel U-MIDAS here means a smooth non-parametric lag curve:\n")
+cat("  U-MIDAS coefficients are free, but a second-difference penalty\n")
+cat("  discourages jagged week-to-week weights.\n\n")
+
+kernel_feat_names <- feat_names[1:12]
+X_kernel <- X_full[, kernel_feat_names]
+D2_kernel <- diff(diag(ncol(X_kernel)), differences = 2)
+
+fit_kernel_umidas <- function(X, y, lambda) {
+  ok <- complete.cases(X) & !is.na(y)
+  X  <- as.matrix(X[ok, , drop = FALSE])
+  y  <- y[ok]
+
+  Z <- cbind(Intercept = 1, X)
+  P <- matrix(0, nrow = ncol(Z), ncol = ncol(Z))
+  P[-1, -1] <- t(D2_kernel) %*% D2_kernel
+
+  coef_hat <- solve(t(Z) %*% Z + lambda * P, t(Z) %*% y)
+  list(coef = as.numeric(coef_hat), lambda = lambda)
+}
+
+predict_kernel_umidas <- function(fit, X_new) {
+  X_new <- as.matrix(X_new)
+  Z_new <- cbind(Intercept = 1, X_new)
+  as.numeric(Z_new %*% fit$coef)
+}
+
+cat("=== Kernel U-MIDAS lambda selection ===\n")
+
+ok_kernel <- which(complete.cases(X_kernel))
+tune_rows_k <- intersect(ok_kernel, which(cpi_dates <= as.Date("2012-12-31")))
+val_rows_k  <- intersect(ok_kernel, which(cpi_dates > as.Date("2012-12-31") &
+                                            cpi_dates <= as.Date("2014-12-31")))
+
+lambda_grid_k <- c(0, 10^seq(-6, 3, length.out = 25))
+
+lambda_tbl_k <- do.call(rbind, lapply(lambda_grid_k, function(lam) {
+  fit_k <- fit_kernel_umidas(X_kernel[tune_rows_k, ], y_all[tune_rows_k],
+                             lambda = lam)
+  pred_k <- predict_kernel_umidas(fit_k, X_kernel[val_rows_k, ])
+  data.frame(
+    lambda = lam,
+    Val_RMSE = rmse(y_all[val_rows_k] - pred_k),
+    Roughness = sum((D2_kernel %*% fit_k$coef[-1])^2),
+    stringsAsFactors = FALSE
+  )
+}))
+
+best_lambda_k <- lambda_tbl_k$lambda[which.min(lambda_tbl_k$Val_RMSE)]
+
+cat(sprintf("Best lambda: %.8f | Val RMSE: %.5f | Roughness: %.5f\n\n",
+            best_lambda_k,
+            min(lambda_tbl_k$Val_RMSE),
+            lambda_tbl_k$Roughness[which.min(lambda_tbl_k$Val_RMSE)]))
+
+write.csv(transform(lambda_tbl_k,
+                    Val_RMSE = round(Val_RMSE, 6),
+                    Roughness = round(Roughness, 6)),
+          "output/tables/kernel_umidas_lambda_grid.csv",
+          row.names = FALSE)
+
+fit_kernel_full <- fit_kernel_umidas(X_kernel[ok_kernel, ], y_all[ok_kernel],
+                                     lambda = best_lambda_k)
+kernel_coefs <- fit_kernel_full$coef[-1]
+names(kernel_coefs) <- kernel_feat_names
+
+cat("=== Kernel U-MIDAS full-sample lag weights ===\n")
+for (j in seq_along(kernel_coefs)) {
+  cat(sprintf("  %-12s  %+.5f\n", kernel_feat_names[j], kernel_coefs[j]))
+}
+cat("\n")
+
+write.csv(
+  data.frame(Feature = kernel_feat_names,
+             Lag_Index = seq_along(kernel_feat_names),
+             Coefficient = as.numeric(kernel_coefs),
+             stringsAsFactors = FALSE),
+  "output/tables/kernel_umidas_weights.csv", row.names = FALSE
+)
+
+cat("=== Kernel U-MIDAS rolling window (expanding, 2015-2022) ===\n")
+
+test_idx_k  <- which(cpi_dates >= as.Date("2015-01-01"))
+n_test_k    <- length(test_idx_k)
+fc_kernel   <- rep(NA_real_, n_test_k)
+
+t0_k <- proc.time()
+
+for (i in seq_len(n_test_k)) {
+  te_i <- test_idx_k[i]
+
+  tr_rows <- intersect(ok_kernel, seq_len(te_i - 1L))
+  if (length(tr_rows) < 36L || any(is.na(X_kernel[te_i, ]))) next
+
+  fit_i <- fit_kernel_umidas(X_kernel[tr_rows, ], y_all[tr_rows],
+                             lambda = best_lambda_k)
+  fc_kernel[i] <- predict_kernel_umidas(
+    fit_i,
+    matrix(X_kernel[te_i, ], nrow = 1L,
+           dimnames = list(NULL, colnames(X_kernel)))
+  )
+
+  if (i %% 12L == 0L || i == 1L)
+    cat(sprintf("  [%3d/%d] %s  kernel=%+.4f\n",
+                i, n_test_k, format(cpi_dates[te_i], "%Y-%m"),
+                fc_kernel[i]))
+}
+
+elapsed_k <- round((proc.time() - t0_k)["elapsed"], 1)
+cat("\nKernel U-MIDAS rolling window complete in", elapsed_k, "seconds.\n\n")
+
+y_actual_k <- y_all[test_idx_k]
+e_kernel   <- y_actual_k - fc_kernel
+
+arimax_rmse_k  <- rmse(ph4$y_actual - ph4$fc_arimax)
+nealmon_rmse_k <- rmse(ph4$y_actual - ph4$fc_nealmon)
+nbeta_rmse_k   <- rmse(ph4$y_actual - ph4$fc_nbeta)
+umidas_rmse_k  <- rmse(ph4$y_actual - ph4$fc_umidas)
+xgb_rmse_k     <- rmse(e_xgb)
+kernel_rmse_k  <- rmse(e_kernel)
+
+kernel_results <- data.frame(
+  Model = c("ARIMAX", "Kernel U-MIDAS", "U-MIDAS",
+            "MIDAS nealmon", "MIDAS nbeta", "XGBoost"),
+  RMSE = round(c(arimax_rmse_k, kernel_rmse_k, umidas_rmse_k,
+                 nealmon_rmse_k, nbeta_rmse_k, xgb_rmse_k), 6),
+  MAE = round(c(mae(ph4$y_actual - ph4$fc_arimax),
+                mae(e_kernel),
+                mae(ph4$y_actual - ph4$fc_umidas),
+                mae(ph4$y_actual - ph4$fc_nealmon),
+                mae(ph4$y_actual - ph4$fc_nbeta),
+                mae(e_xgb)), 6),
+  Dir_Acc_pct = c(dir_acc(ph4$fc_arimax, ph4$y_actual),
+                  dir_acc(fc_kernel, y_actual_k),
+                  dir_acc(ph4$fc_umidas, ph4$y_actual),
+                  dir_acc(ph4$fc_nealmon, ph4$y_actual),
+                  dir_acc(ph4$fc_nbeta, ph4$y_actual),
+                  dir_acc(fc_xgb, y_actual)),
+  vs_ARIMAX_pct = round(c(0,
+                          100 * (kernel_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (umidas_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (nealmon_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (nbeta_rmse_k - arimax_rmse_k) / arimax_rmse_k,
+                          100 * (xgb_rmse_k - arimax_rmse_k) / arimax_rmse_k),
+                        1),
+  Complexity = c("Monthly average", "12 lags + smoothness penalty",
+                 "12 free lags", "3 lag-shape params",
+                 "3 lag-shape params", "Tree ensemble"),
+  Interpretable = c("Low", "High", "Partial", "High", "High", "Medium"),
+  stringsAsFactors = FALSE
+)
+
+cat("=== Kernel U-MIDAS vs benchmarks ===\n")
+print(kernel_results, row.names = FALSE)
+
+write.csv(kernel_results, "output/tables/kernel_umidas_results.csv",
+          row.names = FALSE)
+
+saveRDS(list(
+  fc_kernel       = fc_kernel,
+  y_actual        = y_actual_k,
+  test_dates      = cpi_dates[test_idx_k],
+  lambda          = best_lambda_k,
+  coefs           = kernel_coefs,
+  lambda_grid     = lambda_tbl_k
+), "data/processed/kernel_umidas_forecasts.rds")
+
+render(function() {
+  cols <- ifelse(grepl("wti_m1", kernel_feat_names), "tomato",
+           ifelse(grepl("wti_m2", kernel_feat_names), "darkorange",
+                  "steelblue"))
+  par(mar = c(6, 4.5, 4, 1))
+  plot(seq_along(kernel_coefs), kernel_coefs,
+       type = "b", pch = 16, lwd = 2,
+       col = "grey30", xaxt = "n",
+       main = "Kernel U-MIDAS Lag Weights",
+       sub = sprintf("Validation selected lambda = %.6f, so the smoother collapses to U-MIDAS",
+                     best_lambda_k),
+       xlab = "", ylab = "Coefficient value")
+  axis(1, at = seq_along(kernel_feat_names),
+       labels = gsub("wti_", "", kernel_feat_names),
+       las = 2, cex.axis = 0.8)
+  points(seq_along(kernel_coefs), kernel_coefs,
+         pch = 19, cex = 1.25, col = cols)
+  abline(h = 0, col = "grey45", lty = 2)
+  legend("topright", bty = "n", cex = 0.82,
+         col = c("steelblue", "tomato", "darkorange"),
+         pch = 19,
+         legend = c("Current month (m0)", "Prior month (m1)",
+                    "2 months ago (m2)"))
+}, "output/figures/29_kernel_umidas_weights.png", 10, 5)
+
+render(function() {
+  lambda_plot <- lambda_tbl_k[lambda_tbl_k$lambda > 0, ]
+  par(mar = c(5, 4.5, 4, 1))
+  plot(log10(lambda_plot$lambda), lambda_plot$Val_RMSE,
+       type = "b", pch = 16, col = "steelblue", lwd = 2,
+       main = "Kernel U-MIDAS Lambda Selection",
+       sub = "Validation window: 2013-2014; lower RMSE is better",
+       xlab = "log10(lambda)",
+       ylab = "Validation RMSE")
+  if (best_lambda_k > 0)
+    abline(v = log10(best_lambda_k), col = "firebrick", lty = 2, lwd = 1.5)
+  legend("topright", bty = "n", cex = 0.82,
+         col = c("steelblue", "firebrick"),
+         lty = c(1, 2), pch = c(16, NA),
+         legend = c("Validation RMSE", "Selected lambda"))
+}, "output/figures/30_kernel_lambda_selection.png", 9, 5)
+
+render(function() {
+  ylim <- range(c(y_actual_k, fc_kernel, ph4$fc_nbeta, ph4$fc_arimax),
+                na.rm = TRUE)
+  par(mar = c(4, 4.5, 4, 1))
+  plot(cpi_dates[test_idx_k], y_actual_k, type = "l",
+       col = "black", lwd = 2.1, ylim = ylim,
+       main = "Kernel U-MIDAS Forecasts vs MIDAS and ARIMAX",
+       sub = sprintf("Kernel RMSE = %.5f | nbeta RMSE = %.5f | ARIMAX RMSE = %.5f",
+                     kernel_rmse_k, nbeta_rmse_k, arimax_rmse_k),
+       xlab = "", ylab = "Monthly log-change in CPI Energy")
+  lines(cpi_dates[test_idx_k], ph4$fc_arimax,
+        col = "tomato", lwd = 1.3, lty = 2)
+  lines(cpi_dates[test_idx_k], fc_kernel,
+        col = "darkorange", lwd = 1.5, lty = 1)
+  lines(cpi_dates[test_idx_k], ph4$fc_nbeta,
+        col = "forestgreen", lwd = 1.5, lty = 3)
+  abline(h = 0, col = "grey60", lty = 2, lwd = 0.8)
+  legend("bottomleft", bty = "n", cex = 0.82,
+         lwd = c(2.1, 1.3, 1.5, 1.5),
+         lty = c(1, 2, 1, 3),
+         col = c("black", "tomato", "darkorange", "forestgreen"),
+         legend = c("Actual",
+                    paste0("ARIMAX (RMSE=", round(arimax_rmse_k, 4), ")"),
+                    paste0("Kernel U-MIDAS (RMSE=", round(kernel_rmse_k, 4), ")"),
+                    paste0("MIDAS nbeta (RMSE=", round(nbeta_rmse_k, 4), ")")))
+}, "output/figures/31_kernel_umidas_forecasts.png", 12, 5)
+
+cat("\n=== Phase 6a complete ===\n")
+cat(sprintf("  Kernel U-MIDAS RMSE: %.5f (%+.1f%% vs ARIMAX)\n",
+            kernel_rmse_k,
+            100 * (kernel_rmse_k - arimax_rmse_k) / arimax_rmse_k))
+cat(sprintf("  Selected lambda: %.8f | Dir. Acc.: %.1f%%\n",
+            best_lambda_k, dir_acc(fc_kernel, y_actual_k)))
+cat("Figures: 29_kernel_umidas_weights.png | 30_kernel_lambda_selection.png | 31_kernel_umidas_forecasts.png\n")
+cat("Tables:  kernel_umidas_lambda_grid.csv | kernel_umidas_weights.csv | kernel_umidas_results.csv\n")
+cat("Data:    data/processed/kernel_umidas_forecasts.rds\n")
+
+# ============================================================
+# PHASE 6b - LSTM              [TO ADD]
+# PHASE 6d - Interpretability  [TO ADD AFTER 6a/6b]
 # ============================================================
