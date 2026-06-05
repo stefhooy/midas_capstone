@@ -48,5 +48,15 @@ because it simply uses more predictors, compresses data better, or overfits.
 - PCA-ARIMAX RMSE: 0.02859 (-4.3% vs ARIMAX), far worse than MIDAS nbeta (-31.1%).
 - Interpretation: PCA compression alone does not solve the mixed-frequency problem. MIDAS wins because it preserves weekly lag timing and estimates interpretable weights.
 
+7. Segmented regression and regime performance
+- Candidate event breaks tested: 2008 GFC/oil shock, 2014-16 oil collapse, and 2020 COVID crash.
+- In the simple monthly y ~ WTI slope model, the 2008 break is marginal (p=0.0732), while 2014 (p=0.4260) and 2020 (p=0.1966) are not significant.
+- One-break grid search selects 2005-10 by AIC, suggesting early-sample instability rather than one clean crisis break.
+- WTI-to-CPI slope is strongest in 2008-2014 (0.7362, p<0.001) and 2021-2022 (0.7304, p=0.0137), weaker before 2008 and during the short COVID window.
+- Pre-COVID OOS regime (2015-2019): MIDAS nealmon wins, RMSE 0.01783 (-28.5% vs ARIMAX).
+- COVID OOS regime (2020): XGBoost wins, RMSE 0.01416 (-62.2% vs ARIMAX), but MIDAS nbeta still beats ARIMAX by 44.0%.
+- Recovery/spike OOS regime (2021-2022): U-MIDAS wins, RMSE 0.02529 (-30.2% vs ARIMAX); LASSO-MIDAS and parametric MIDAS are close behind.
+- Interpretation: the MIDAS advantage is not purely a COVID artifact. Mixed-frequency timing remains valuable across regimes, but the best weighting/forecasting method changes with the energy-market regime.
+
 Main thesis paragraph:
 The extended diagnostics show that the MIDAS advantage is robust and interpretable. LASSO-MIDAS, XGBoost, CLM-SS, and parametric MIDAS all identify prior-month weeks 2-3 as the most predictive WTI observations for monthly CPI Energy, implying a 5-7 week oil-to-consumer-price transmission window. PCA and VIF diagnostics show that the result is not driven by multicollinearity or generic dimensionality reduction: the weekly lag matrix has very low VIF values, PCA-ARIMAX improves ARIMAX only marginally, and MIDAS remains far superior. Forecast-horizon analysis further shows that the result is strongest as a one-month nowcasting exercise, remains useful at h=2, and fades by h=3.

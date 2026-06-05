@@ -39,7 +39,7 @@
 | XGBoost | Tree-based reference benchmark; defend why not primary model | Phase 6c |
 | LASSO-MIDAS | Penalise U-MIDAS lag coefficients via glmnet | Phase 7a |
 | PCA on WTI lags | Reduce 12-week lag matrix to PCs; check multicollinearity (VIF) | Phase 7b - DONE |
-| Segmented regression | Structural break analysis: 2008, 2014, COVID | Phase 7c |
+| Segmented regression | Structural break analysis: 2008, 2014, COVID | Phase 7c - DONE |
 | Directional accuracy | Sign-correct %, precision/recall, Mincer-Zarnowitz | Phase 7d — DONE |
 | Energy/oil literature | Hamilton, Kilian, Baumeister domain refs | Phase 1 — DONE |
 | Forecast horizon validity | How far ahead is oil-CPI prediction valid? Based on oil literature | Phase 7e - DONE |
@@ -212,12 +212,14 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 - [x] PCA-ARIMAX benchmark with first 4 PCs: RMSE 0.02859 (-4.3% vs ARIMAX), far worse than MIDAS nbeta RMSE 0.02057 (-31.1%)
 - [x] Key thesis argument: compression alone is not enough; preserving the weekly timing structure is what gives MIDAS its advantage
 
-#### 7c — Segmented regression: structural breaks (to do)
+#### 7c — Segmented regression: structural breaks (done)
 
-- [ ] Use segmented R package to detect breakpoints in the WTI to CPI regression
-- [ ] Candidate breaks: 2008 financial crisis, 2014-16 oil collapse, 2020 COVID crash
-- [ ] Sub-period rolling windows: 2015-2019 (pre-COVID) vs 2020-2022 (COVID + recovery)
-- [ ] Does the MIDAS advantage over ARIMAX vary across regimes?
+- [x] Base-R segmented break tests used because the segmented package was not installed; no new dependency needed
+- [x] Candidate breaks tested: 2008 GFC/oil shock, 2014-16 oil collapse, 2020 COVID crash
+- [x] Candidate break result: 2008 event is marginal (p=0.073); 2014 and 2020 are not significant in the simple y ~ WTI slope model
+- [x] One-break grid search: best date by AIC is 2005-10, suggesting early-sample slope instability rather than a single clean crisis break
+- [x] Sub-period OOS results: pre-COVID winner MIDAS nealmon; 2020 winner XGBoost; 2021-2022 winner U-MIDAS
+- [x] Key thesis argument: MIDAS advantage is not purely a COVID artifact; mixed-frequency timing remains valuable across regimes, but the best model varies by regime
 
 #### 7d — Extended metrics: directional accuracy (done)
 
@@ -307,7 +309,7 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | Phase 6 — ML benchmarks | To do | XGBoost, LSTM, Kernel U-MIDAS, interpretability table |
 | Phase 7a — LASSO-MIDAS | Done | RMSE 0.02103; largest lags wti_m1_w2 and wti_m1_w3 confirm hump |
 | Phase 7b — PCA on WTI lags | Done | PCA-ARIMAX only -4.3% vs ARIMAX; MIDAS nbeta remains -31.1% |
-| Phase 7c — Segmented regression | To do | Structural breaks 2008, 2014, COVID |
+| Phase 7c — Segmented regression | Done | MIDAS wins pre-COVID; XGBoost wins 2020; U-MIDAS wins recovery/spike |
 | Phase 7e — Forecast horizon validity | Done | h=1 main window (-31.1%); h=2 useful (-14.9%); h=3 fades (+2.2%) |
 | Phase 8 — Thesis writing | To do | Due 29 June 2026, 30 pages |
 | Phase 9 — Poster | To do | Due 29 June 2026, A0 PDF |
