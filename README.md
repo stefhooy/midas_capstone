@@ -38,7 +38,7 @@
 | LSTM | Recurrent neural network as ML benchmark | Phase 6b |
 | XGBoost | Tree-based reference benchmark; defend why not primary model | Phase 6c |
 | LASSO-MIDAS | Penalise U-MIDAS lag coefficients via glmnet | Phase 7a |
-| PCA on WTI lags | Reduce 12-week lag matrix to PCs; check multicollinearity (VIF) | Phase 7b |
+| PCA on WTI lags | Reduce 12-week lag matrix to PCs; check multicollinearity (VIF) | Phase 7b - DONE |
 | Segmented regression | Structural break analysis: 2008, 2014, COVID | Phase 7c |
 | Directional accuracy | Sign-correct %, precision/recall, Mincer-Zarnowitz | Phase 7d — DONE |
 | Energy/oil literature | Hamilton, Kilian, Baumeister domain refs | Phase 1 — DONE |
@@ -204,12 +204,13 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 - [x] Compare OOS RMSE to ridge CLM-SS, U-MIDAS, and MIDAS nbeta
 - [x] Key thesis argument: LASSO discovers the same lag structure as the parametric shapes, confirming the hump is real
 
-#### 7b — PCA on weekly WTI lags (to do)
+#### 7b — PCA on weekly WTI lags (done)
 
-- [ ] Build the 12-column WTI lag matrix; compute pairwise VIF (adjacent weeks are correlated)
-- [ ] Run PCA, show scree plot: how many components explain 95% of variance?
-- [ ] Use top 3-4 principal components as regressors in ARIMAX (PCA-ARIMAX)
-- [ ] Compare: does PCA-ARIMAX beat monthly-average ARIMAX? PCA retains more information than simple averaging.
+- [x] Build the 12-column WTI lag matrix; compute pairwise correlations and VIF
+- [x] VIF result: max pairwise absolute correlation 0.254; median VIF 1.11; max VIF 1.25, so severe multicollinearity is not driving the MIDAS result
+- [x] Run PCA and scree plot: 11 PCs needed to explain 95% of variance, meaning weekly WTI shocks are not easily compressed into a few components
+- [x] PCA-ARIMAX benchmark with first 4 PCs: RMSE 0.02859 (-4.3% vs ARIMAX), far worse than MIDAS nbeta RMSE 0.02057 (-31.1%)
+- [x] Key thesis argument: compression alone is not enough; preserving the weekly timing structure is what gives MIDAS its advantage
 
 #### 7c — Segmented regression: structural breaks (to do)
 
@@ -305,7 +306,7 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | Phase 7d — Directional accuracy | Done | nealmon 80.2% dir. acc.; 100% crash recall vs 50% ARIMAX |
 | Phase 6 — ML benchmarks | To do | XGBoost, LSTM, Kernel U-MIDAS, interpretability table |
 | Phase 7a — LASSO-MIDAS | Done | RMSE 0.02103; largest lags wti_m1_w2 and wti_m1_w3 confirm hump |
-| Phase 7b — PCA on WTI lags | To do | VIF analysis, PCA-ARIMAX comparison |
+| Phase 7b — PCA on WTI lags | Done | PCA-ARIMAX only -4.3% vs ARIMAX; MIDAS nbeta remains -31.1% |
 | Phase 7c — Segmented regression | To do | Structural breaks 2008, 2014, COVID |
 | Phase 7e — Forecast horizon validity | Done | h=1 main window (-31.1%); h=2 useful (-14.9%); h=3 fades (+2.2%) |
 | Phase 8 — Thesis writing | To do | Due 29 June 2026, 30 pages |

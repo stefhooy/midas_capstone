@@ -1,0 +1,52 @@
+Phase 7 Extended Models - Capstone Takeaways
+
+Core meaning:
+Phase 7 strengthens the main capstone claim that MIDAS outperforms ARIMAX
+because it preserves economically meaningful weekly timing information, not
+because it simply uses more predictors, compresses data better, or overfits.
+
+1. Directional and large-move performance
+- ARIMAX RMSE: 0.02986; directional accuracy: 64.6%.
+- MIDAS nbeta RMSE: 0.02057 (-31.1% vs ARIMAX), best RMSE model.
+- MIDAS nealmon RMSE: 0.02104 (-29.5% vs ARIMAX), best directional accuracy at 80.2%.
+- MIDAS nealmon, MIDAS nbeta, U-MIDAS, and CLM-SS (12 lags) all hit 100% of large up-moves and large down-moves.
+- ARIMAX misses half of the large down-moves.
+
+2. LASSO-MIDAS
+- LASSO-MIDAS RMSE: 0.02103 (-29.6% vs ARIMAX), almost identical to MIDAS nealmon.
+- Directional accuracy: 76.0%.
+- Best lambda: 0.000721.
+- 11 of 12 weekly lags survive; only wti_m2_w1 is zeroed out.
+- Largest coefficients are wti_m1_w2 (0.1848) and wti_m1_w3 (0.1570).
+- Interpretation: LASSO independently confirms the prior-month weeks 2-3 lag hump found by MIDAS, CLM-SS, and XGBoost.
+
+3. XGBoost
+- XGBoost RMSE: 0.02365 (-20.8% vs ARIMAX).
+- Directional accuracy: 72.9%.
+- XGBoost beats ARIMAX but does not beat MIDAS.
+- Important features include prior-month WTI weeks 2-3, confirming the same 5-7 week transmission window from a tree-based ML model.
+
+4. Forecast horizon validity
+- h=1: MIDAS nbeta RMSE 0.02057 (-31.1% vs ARIMAX), statistically significant DM p=0.0005.
+- h=2: MIDAS nbeta RMSE 0.02419 (-14.9% vs ARIMAX), still useful, DM p=0.0340.
+- h=3: MIDAS nbeta RMSE 0.03023 (+2.2% vs ARIMAX), no MIDAS advantage.
+- Interpretation: the capstone should describe the main empirical exercise as one-month nowcasting. MIDAS is strongest at h=1, still useful at h=2, and fades by h=3.
+
+5. Year-by-year stress test
+- MIDAS-type models beat ARIMAX in most years.
+- XGBoost performs especially well in 2018 and 2020.
+- U-MIDAS wins in 2022.
+- ARIMAX is never the yearly RMSE winner among the reported models.
+- Interpretation: MIDAS advantage is not only a COVID artifact; the gains appear across normal and crisis periods, though the best model varies by regime.
+
+6. PCA + VIF
+- Max pairwise absolute correlation among the 12 weekly WTI lags: 0.254.
+- Median VIF: 1.11; max VIF: 1.25.
+- There is no multicollinearity concern.
+- PCA needs 11 components to explain 95% of variance.
+- First 4 PCs explain only 47.85% of variance.
+- PCA-ARIMAX RMSE: 0.02859 (-4.3% vs ARIMAX), far worse than MIDAS nbeta (-31.1%).
+- Interpretation: PCA compression alone does not solve the mixed-frequency problem. MIDAS wins because it preserves weekly lag timing and estimates interpretable weights.
+
+Main thesis paragraph:
+The extended diagnostics show that the MIDAS advantage is robust and interpretable. LASSO-MIDAS, XGBoost, CLM-SS, and parametric MIDAS all identify prior-month weeks 2-3 as the most predictive WTI observations for monthly CPI Energy, implying a 5-7 week oil-to-consumer-price transmission window. PCA and VIF diagnostics show that the result is not driven by multicollinearity or generic dimensionality reduction: the weekly lag matrix has very low VIF values, PCA-ARIMAX improves ARIMAX only marginally, and MIDAS remains far superior. Forecast-horizon analysis further shows that the result is strongest as a one-month nowcasting exercise, remains useful at h=2, and fades by h=3.

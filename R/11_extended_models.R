@@ -831,3 +831,285 @@ cat("Tables:\n")
 cat("  output/tables/forecast_horizon_results.csv\n")
 cat("  output/tables/yearly_rmse_by_model.csv\n")
 cat("  output/tables/forecast_horizon_summary.txt\n")
+
+# ============================================================
+# PHASE 7b - PCA + VIF ON WEEKLY WTI LAGS
+# ============================================================
+# This section asks whether the 12 weekly WTI lags are too collinear
+# for unrestricted models, and whether simple PCA compression can
+# recover the same forecasting gains as MIDAS.
+#
+# Key benchmark:
+#   ARIMAX averages 12 weekly lags into monthly WTI.
+#   PCA-ARIMAX keeps the 12 weekly lag matrix but compresses it into
+#   a few orthogonal principal components.
+#   MIDAS keeps the timing structure through lag weights.
+#
+# If PCA-ARIMAX beats ARIMAX but loses to MIDAS, the thesis argument is:
+# compression helps, but preserving interpretable lag timing helps more.
+# ============================================================
+
+cat("\n============================================================\n")
+cat("PHASE 7b - PCA + VIF ON WEEKLY WTI LAGS\n")
+cat("============================================================\n\n")
+
+cat("Question: are MIDAS gains just a dimensionality-reduction effect,\n")
+cat("or does the weekly timing structure itself matter?\n\n")
+
+# ---- 7b-i: Multicollinearity diagnostics -------------------
+X_pca <- X_lasso
+colnames(X_pca) <- lasso_feat_names
+
+ok_pca <- which(complete.cases(X_pca))
+X_pca_complete <- X_pca[ok_pca, ]
+
+cor_mat <- cor(X_pca_complete)
+
+vif_manual <- sapply(seq_len(ncol(X_pca_complete)), function(j) {
+  y_j <- X_pca_complete[, j]
+  X_j <- X_pca_complete[, -j, drop = FALSE]
+  r2_j <- summary(lm(y_j ~ X_j))$r.squared
+  1 / (1 - r2_j)
+})
+names(vif_manual) <- colnames(X_pca_complete)
+
+max_abs_corr <- sapply(seq_len(ncol(cor_mat)), function(j)
+  max(abs(cor_mat[j, -j])))
+
+vif_tbl <- data.frame(
+  Feature     = colnames(X_pca_complete),
+  VIF         = round(vif_manual, 3),
+  Max_Abs_Corr_With_Other_Lag = round(max_abs_corr, 3),
+  Month_Block = rep(c("Current month", "Prior month", "Two months ago"),
+                    each = 4),
+  stringsAsFactors = FALSE
+)
+
+cat("=== VIF and pairwise-correlation diagnostics ===\n")
+cat(sprintf("Max pairwise absolute correlation: %.3f\n",
+            max(abs(cor_mat[upper.tri(cor_mat)]))))
+cat(sprintf("Median VIF: %.2f | Max VIF: %.2f\n\n",
+            median(vif_manual), max(vif_manual)))
+print(vif_tbl, row.names = FALSE)
+
+write.csv(vif_tbl, "output/tables/pca_vif_diagnostics.csv",
+          row.names = FALSE)
+
+# ---- 7b-ii: PCA variance explained -------------------------
+pca_full <- prcomp(X_pca_complete, center = TRUE, scale. = TRUE)
+
+var_explained <- pca_full$sdev^2 / sum(pca_full$sdev^2)
+cum_var       <- cumsum(var_explained)
+n_pc_95       <- which(cum_var >= 0.95)[1]
+n_pc_model    <- min(4L, n_pc_95)
+
+pca_var_tbl <- data.frame(
+  PC = paste0("PC", seq_along(var_explained)),
+  Variance_Explained_pct = round(100 * var_explained, 2),
+  Cumulative_pct = round(100 * cum_var, 2),
+  stringsAsFactors = FALSE
+)
+
+cat("\n=== PCA variance explained ===\n")
+print(pca_var_tbl, row.names = FALSE)
+cat(sprintf("\nPCs needed for 95%% variance: %d\n", n_pc_95))
+cat(sprintf("PCA-ARIMAX benchmark uses first %d PCs.\n\n", n_pc_model))
+
+write.csv(pca_var_tbl, "output/tables/pca_variance_explained.csv",
+          row.names = FALSE)
+
+# ---- 7b-iii: Rolling PCA-ARIMAX benchmark ------------------
+cat("=== PCA-ARIMAX rolling window (expanding, 2015-2022) ===\n")
+
+test_idx_pca <- which(cpi_dates >= as.Date("2015-01-01"))
+n_test_pca   <- length(test_idx_pca)
+fc_pca_ar    <- rep(NA_real_, n_test_pca)
+
+t0_pca <- proc.time()
+
+for (i in seq_len(n_test_pca)) {
+  te_i <- test_idx_pca[i]
+
+  tr_rows <- which(seq_len(te_i - 1L) %in% ok_pca)
+  if (length(tr_rows) < 36L || any(is.na(X_pca[te_i, ]))) next
+
+  X_tr_pca <- X_pca[tr_rows, , drop = FALSE]
+  y_tr_pca <- y_all[tr_rows]
+
+  pca_i <- prcomp(X_tr_pca, center = TRUE, scale. = TRUE)
+
+  pc_tr <- predict(pca_i, newdata = X_tr_pca)[, seq_len(n_pc_model),
+                                               drop = FALSE]
+  pc_te <- predict(pca_i, newdata = matrix(X_pca[te_i, ], nrow = 1L,
+                                           dimnames = list(NULL, colnames(X_pca))))[
+                                             , seq_len(n_pc_model),
+                                             drop = FALSE]
+
+  fit_pca_ar <- tryCatch(
+    auto.arima(y_tr_pca, xreg = pc_tr, ic = "aic",
+               stepwise = TRUE, approximation = TRUE),
+    error = function(e) NULL
+  )
+
+  if (!is.null(fit_pca_ar)) {
+    fc_pca_ar[i] <- tryCatch(
+      as.numeric(forecast(fit_pca_ar, h = 1L, xreg = pc_te)$mean),
+      error = function(e) NA_real_
+    )
+  }
+
+  if (i %% 24L == 0L)
+    cat(sprintf("  [%2d/%d] %s  PCA-ARIMAX=%+.4f\n",
+                i, n_test_pca, format(cpi_dates[te_i], "%Y-%m"),
+                fc_pca_ar[i]))
+}
+
+elapsed_pca <- round((proc.time() - t0_pca)["elapsed"], 1)
+cat("PCA-ARIMAX rolling window complete in", elapsed_pca, "seconds.\n\n")
+
+y_actual_pca <- y_all[test_idx_pca]
+e_pca_ar     <- y_actual_pca - fc_pca_ar
+
+arimax_rmse_pca  <- rmse(ph4$y_actual - ph4$fc_arimax)
+nbeta_rmse_pca   <- rmse(ph4$y_actual - ph4$fc_nbeta)
+nealmon_rmse_pca <- rmse(ph4$y_actual - ph4$fc_nealmon)
+umidas_rmse_pca  <- rmse(ph4$y_actual - ph4$fc_umidas)
+pca_rmse         <- rmse(e_pca_ar)
+
+pca_results_tbl <- data.frame(
+  Model = c("ARIMAX monthly mean", "PCA-ARIMAX",
+            "MIDAS nealmon", "MIDAS nbeta", "U-MIDAS"),
+  RMSE = round(c(arimax_rmse_pca, pca_rmse,
+                 nealmon_rmse_pca, nbeta_rmse_pca, umidas_rmse_pca), 6),
+  MAE = round(c(mae(ph4$y_actual - ph4$fc_arimax),
+                mae(e_pca_ar),
+                mae(ph4$y_actual - ph4$fc_nealmon),
+                mae(ph4$y_actual - ph4$fc_nbeta),
+                mae(ph4$y_actual - ph4$fc_umidas)), 6),
+  vs_ARIMAX_pct = round(c(0,
+                          100 * (pca_rmse - arimax_rmse_pca) / arimax_rmse_pca,
+                          100 * (nealmon_rmse_pca - arimax_rmse_pca) / arimax_rmse_pca,
+                          100 * (nbeta_rmse_pca - arimax_rmse_pca) / arimax_rmse_pca,
+                          100 * (umidas_rmse_pca - arimax_rmse_pca) / arimax_rmse_pca),
+                        1),
+  Parameters = c("ARIMA + 1 xreg",
+                 paste0("ARIMA + ", n_pc_model, " PCs"),
+                 "3 MIDAS weight params",
+                 "3 MIDAS weight params",
+                 "12 unrestricted lag coefs"),
+  Interpretable_Lag_Shape = c("No", "No", "Yes", "Yes", "Partial"),
+  stringsAsFactors = FALSE
+)
+
+cat("=== PCA-ARIMAX vs MIDAS benchmark ===\n")
+print(pca_results_tbl, row.names = FALSE)
+
+write.csv(pca_results_tbl, "output/tables/pca_arimax_results.csv",
+          row.names = FALSE)
+
+saveRDS(list(
+  fc_pca_arimax = fc_pca_ar,
+  y_actual      = y_actual_pca,
+  test_dates    = cpi_dates[test_idx_pca],
+  n_pc_model    = n_pc_model,
+  n_pc_95       = n_pc_95,
+  vif_tbl       = vif_tbl,
+  pca_var_tbl   = pca_var_tbl
+), "data/processed/pca_arimax_forecasts.rds")
+
+# ---- 7b-iv: Plots ------------------------------------------
+render(function() {
+  cols <- ifelse(grepl("wti_m1", vif_tbl$Feature), "tomato",
+           ifelse(grepl("wti_m2", vif_tbl$Feature), "darkorange",
+                  "steelblue"))
+
+  par(mar = c(5, 7, 4, 2))
+  plot(vif_tbl$VIF, seq_len(nrow(vif_tbl)),
+       type = "n", xlim = c(0.95, 5.35), yaxt = "n",
+       main = "Weekly WTI Lag VIFs Are Safely Below the Concern Threshold",
+       sub = sprintf("Max VIF = %.2f; common multicollinearity concern threshold = 5",
+                     max(vif_tbl$VIF)),
+       xlab = "Variance Inflation Factor (VIF)",
+       ylab = "")
+  rect(0.95, 0, 5, nrow(vif_tbl) + 1,
+       col = rgb(0.92, 0.97, 0.92, 0.65), border = NA)
+  rect(5, 0, 5.35, nrow(vif_tbl) + 1,
+       col = rgb(1, 0.92, 0.90, 0.75), border = NA)
+  grid(nx = NA, ny = NULL, col = "grey88", lty = 1)
+  axis(2, at = seq_len(nrow(vif_tbl)), labels = vif_tbl$Feature,
+       las = 1, cex.axis = 0.82)
+  abline(v = 1, col = "grey45", lwd = 1.2)
+  abline(v = 5, col = "firebrick", lty = 2, lwd = 1.6)
+  points(vif_tbl$VIF, seq_len(nrow(vif_tbl)),
+         pch = 19, cex = 1.35, col = cols)
+  text(vif_tbl$VIF + 0.18, seq_len(nrow(vif_tbl)),
+       labels = sprintf("%.2f", vif_tbl$VIF),
+       cex = 0.72, adj = 0)
+  text(5.02, nrow(vif_tbl) + 0.35, "concern\nthreshold",
+       adj = c(0, 1), cex = 0.72, col = "firebrick")
+  legend("bottomright", bty = "n", cex = 0.82,
+         col = c("steelblue", "tomato", "darkorange", "firebrick"),
+         pch = c(19, 19, 19, NA),
+         lty = c(NA, NA, NA, 2),
+         lwd = c(NA, NA, NA, 1.6),
+         legend = c("Current month", "Prior month", "Two months ago",
+                    "VIF = 5 concern"))
+}, "output/figures/23_vif_weekly_lags.png", 10, 5)
+
+render(function() {
+  par(mar = c(4, 4.5, 4, 1))
+  bp <- barplot(100 * var_explained,
+                names.arg = paste0("PC", seq_along(var_explained)),
+                col = "steelblue", border = "white",
+                main = "PCA Scree Plot: Weekly WTI Lag Matrix",
+                sub = sprintf("%d PCs needed for 95%% variance; PCA-ARIMAX uses first %d PCs",
+                              n_pc_95, n_pc_model),
+                xlab = "Principal component",
+                ylab = "Variance explained (%)")
+  lines(bp, 100 * cum_var, type = "b", pch = 16,
+        col = "tomato", lwd = 2)
+  abline(h = 95, col = "grey45", lty = 2)
+  legend("topright", bty = "n", cex = 0.85,
+         col = c("steelblue", "tomato", "grey45"),
+         lwd = c(6, 2, 1), lty = c(1, 1, 2),
+         legend = c("Individual variance", "Cumulative variance", "95% threshold"))
+}, "output/figures/24_pca_scree.png", 10, 5)
+
+render(function() {
+  ylim <- range(c(y_actual_pca, ph4$fc_arimax, ph4$fc_nbeta, fc_pca_ar),
+                na.rm = TRUE)
+  par(mar = c(4, 4.5, 4, 1))
+  plot(cpi_dates[test_idx_pca], y_actual_pca, type = "l",
+       col = "black", lwd = 2.1, ylim = ylim,
+       main = "PCA-ARIMAX Forecasts vs MIDAS and ARIMAX",
+       sub = sprintf("PCA-ARIMAX uses first %d PCs from 12 weekly WTI lags",
+                     n_pc_model),
+       xlab = "", ylab = "Monthly log-change in CPI Energy")
+  lines(cpi_dates[test_idx_pca], ph4$fc_arimax, col = "tomato",
+        lwd = 1.4, lty = 2)
+  lines(cpi_dates[test_idx_pca], fc_pca_ar, col = "darkorange",
+        lwd = 1.5, lty = 1)
+  lines(cpi_dates[test_idx_pca], ph4$fc_nbeta, col = "forestgreen",
+        lwd = 1.5, lty = 3)
+  abline(h = 0, col = "grey60", lty = 2, lwd = 0.8)
+  legend("bottomleft", bty = "n", cex = 0.82,
+         lwd = c(2.1, 1.4, 1.5, 1.5),
+         lty = c(1, 2, 1, 3),
+         col = c("black", "tomato", "darkorange", "forestgreen"),
+         legend = c("Actual",
+                    paste0("ARIMAX (RMSE=", round(arimax_rmse_pca, 4), ")"),
+                    paste0("PCA-ARIMAX (RMSE=", round(pca_rmse, 4), ")"),
+                    paste0("MIDAS nbeta (RMSE=", round(nbeta_rmse_pca, 4), ")")))
+}, "output/figures/25_pca_arimax_forecasts.png", 12, 5)
+
+cat("\n=== Phase 7b complete ===\n")
+cat(sprintf("  Max VIF: %.2f | PCs for 95%% variance: %d\n",
+            max(vif_manual), n_pc_95))
+cat(sprintf("  PCA-ARIMAX RMSE: %.5f (%+.1f%% vs ARIMAX)\n",
+            pca_rmse, 100 * (pca_rmse - arimax_rmse_pca) / arimax_rmse_pca))
+cat(sprintf("  MIDAS nbeta RMSE: %.5f (%+.1f%% vs ARIMAX)\n",
+            nbeta_rmse_pca,
+            100 * (nbeta_rmse_pca - arimax_rmse_pca) / arimax_rmse_pca))
+cat("Figures: 23_vif_weekly_lags.png | 24_pca_scree.png | 25_pca_arimax_forecasts.png\n")
+cat("Tables:  pca_vif_diagnostics.csv | pca_variance_explained.csv | pca_arimax_results.csv\n")
+cat("Data:    data/processed/pca_arimax_forecasts.rds\n")

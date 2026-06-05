@@ -1,0 +1,6 @@
+"Model","RMSE","MAE","vs_ARIMAX_pct","Parameters","Interpretable_Lag_Shape"
+"ARIMAX monthly mean",0.029863,0.021978,0,"ARIMA + 1 xreg","No"
+"PCA-ARIMAX",0.028591,0.020994,-4.3,"ARIMA + 4 PCs","No"
+"MIDAS nealmon",0.021043,0.015659,-29.5,"3 MIDAS weight params","Yes"
+"MIDAS nbeta",0.020568,0.015571,-31.1,"3 MIDAS weight params","Yes"
+"U-MIDAS",0.022259,0.016772,-25.5,"12 unrestricted lag coefs","Partial"
