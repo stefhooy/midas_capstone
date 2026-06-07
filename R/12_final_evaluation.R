@@ -279,6 +279,40 @@ for (i in seq_len(nrow(metric_tbl))) {
 
 writeLines(md, "output/tables/final_oos_forecast_metrics.md")
 
+# ============================================================
+# 3. Intro-ready figure: RMSE reduction relative to ARIMAX
+# ============================================================
+
+dir.create("output/figures", recursive = TRUE, showWarnings = FALSE)
+
+intro_tbl <- metric_tbl[metric_tbl$Model %in%
+                          c("MIDAS nbeta", "MIDAS nealmon", "U-MIDAS",
+                            "CLM-SS (12 lags)", "XGBoost", "LSTM",
+                            "PCA-ARIMAX", "ARIMAX"), ]
+intro_tbl <- intro_tbl[order(intro_tbl$vs_ARIMAX_RMSE_pct), ]
+
+png("output/figures/34_intro_rmse_improvement.png",
+    width = 10, height = 5.5, units = "in", res = 300)
+par(mar = c(5.2, 8.8, 4.2, 4.2))
+cols <- ifelse(intro_tbl$Model == "MIDAS nbeta", "forestgreen",
+               ifelse(grepl("MIDAS", intro_tbl$Model), "steelblue",
+                      ifelse(intro_tbl$Model == "ARIMAX", "tomato", "grey65")))
+bp <- barplot(-intro_tbl$vs_ARIMAX_RMSE_pct,
+              names.arg = intro_tbl$Model,
+              horiz = TRUE, las = 1,
+              col = cols, border = "white",
+              xlab = "RMSE reduction relative to ARIMAX (%)",
+              main = "Mixed-Frequency Models Reduce Forecast Error",
+              sub = "Out-of-sample test period: January 2015 to December 2022; higher is better",
+              xlim = c(0, 36))
+abline(v = 0, col = "grey40", lwd = 0.8)
+text(pmax(-intro_tbl$vs_ARIMAX_RMSE_pct, 0) + 1.2, bp,
+     labels = ifelse(intro_tbl$Model == "ARIMAX",
+                     "baseline",
+                     paste0(sprintf("%.1f", -intro_tbl$vs_ARIMAX_RMSE_pct), "%")),
+     cex = 0.82, adj = 0)
+dev.off()
+
 summary_lines <- c(
   "Final Evaluation Addendum - AIC/BIC, MASE, MAPE, and PCA Choice",
   "",
@@ -314,3 +348,5 @@ cat("  output/tables/final_insample_aic_bic.csv\n")
 cat("  output/tables/final_oos_forecast_metrics.csv\n")
 cat("  output/tables/final_oos_forecast_metrics.md\n")
 cat("  output/tables/final_evaluation_addendum.txt\n")
+cat("Figure:\n")
+cat("  output/figures/34_intro_rmse_improvement.png\n")

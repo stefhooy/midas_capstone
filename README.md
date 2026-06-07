@@ -260,15 +260,15 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 
 ### Phase 8 — Written Thesis (due 29 June, max 30 pages)
 
-- [ ] Cover page: title, supervisor, IE University, date, AI use declaration
-- [ ] Abstract (150-250 words): problem, method, key result (MIDAS beats ARIMAX by 31%, 100% crash recall)
-- [ ] Chapter 1 — Introduction (2-3 pages): the mixed-frequency problem, thesis contributions, structure
-- [ ] Chapter 2 — Literature Review (3-4 pages): Phase 1 text, already written
-- [ ] Chapter 3 — Methodology (4-5 pages):
-  - [ ] Data: CPIENGSL, DCOILWTICO, PNRGINDEXM; FRED sources; sample; log-diff transformation
-  - [ ] Benchmark models: ARIMAX, nealmon, nbeta, U-MIDAS with equations
-  - [ ] CLM-SS formulation: Z matrix, AR(1) state, MLE via BFGS, identifiability
-  - [ ] Evaluation: expanding window, RMSE, MAE, MASE, sMAPE, DM test, directional accuracy, MZ test; MAPE reported with caveat
+- [x] Cover page: title, supervisor, IE University, date, AI use declaration
+- [x] Abstract (150-250 words): problem, method, key result (MIDAS beats ARIMAX by 31%, 100% crash recall)
+- [x] Chapter 1 — Introduction (2-3 pages): the mixed-frequency problem, thesis contributions, structure
+- [x] Chapter 2 — Literature Review (3-4 pages): Phase 1 text, already written
+- [x] Chapter 3 — Methodology (4-5 pages):
+  - [x] Data: CPIENGSL, DCOILWTICO, PNRGINDEXM; FRED sources; sample; log-diff transformation
+  - [x] Benchmark models: ARIMAX, nealmon, nbeta, U-MIDAS with equations
+  - [x] CLM-SS formulation: Z matrix, AR(1) state, MLE via BFGS, identifiability
+  - [x] Evaluation: expanding window, RMSE, MAE, MASE, sMAPE, DM test, directional accuracy, MZ test; MAPE reported with caveat
 - [ ] Chapter 4 — Results (4-5 pages):
   - [x] Table 1: In-sample AIC/BIC/RMSE generated for applicable models
   - [x] Table 2: OOS RMSE, MAE, MASE, MAPE/sMAPE, directional accuracy generated
