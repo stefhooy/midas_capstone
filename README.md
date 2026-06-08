@@ -14,9 +14,10 @@
 | **y (outcome)** | Monthly log-change in US Consumer Energy CPI (CPIENGSL, FRED). What US households pay for gasoline, heating oil, electricity. Published monthly. |
 | **x (predictor)** | Weekly log-change in WTI crude oil spot price (DCOILWTICO, FRED). Upstream commodity driver. 4 weekly obs per monthly CPI (m=4). |
 | Context only | IMF Global Price of Energy Index (PNRGINDEXM, FRED). Used in Phase 3 EDA only. Not in any model. |
-| Sample | Feb 2000 to Dec 2022. 275 monthly obs, 1199 weekly obs. |
-| Forecasting setup | 1-step-ahead nowcasting. All 4 weekly WTI obs from month t available when forecasting CPI for month t (WTI published weekly, CPI published mid-following-month). |
-| Test period | Jan 2015 to Dec 2022. 96 one-step-ahead forecasts per model. |
+| Original historical sample | Feb 2000 to Dec 2022. 275 monthly obs, 1199 weekly obs. |
+| Historical forecasting setup | Pseudo out-of-sample 1-step-ahead nowcasting. All 4 weekly WTI obs from month t are treated as available when forecasting CPI for month t after the month closes. |
+| Historical test period | Jan 2015 to Dec 2022. 96 one-step-ahead forecasts per model. |
+| New future-forecast extension | Add post-2022 data and evaluate whether the 2015-2022 findings survive on 2023-2026 observations. Separate this from true forward forecasts that require WTI assumptions/scenarios. |
 
 ---
 
@@ -247,6 +248,19 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 - [x] **Rolling subperiod analysis**: yearly RMSE table saved; COVID/recovery years shown explicitly in figure 22.
 - [x] **Summary for thesis discussion**: this is primarily a one-month nowcasting study; the lag hump around prior-month weeks 2-3 is the interpretable transmission mechanism.
 
+#### 7f — Post-2022 true-future forecast extension (to do)
+
+*New extension after clarifying that the current OOS period is a historical pseudo out-of-sample backtest, not a forecast beyond the original dataset.*
+
+- [ ] **Data refresh**: download/update CPIENGSL, DCOILWTICO, and PNRGINDEXM from 2023 to the latest available date; save separately from the original 2000-2022 dataset.
+- [ ] **External holdout evaluation**: train final model specifications on the original 2000-2022 sample, then evaluate forecasts on post-2022 observations. This tests whether the original MIDAS result survives on genuinely later data.
+- [ ] **Forecast-origin audit**: clearly separate three cases: historical pseudo-OOS (2015-2022), post-2022 external holdout, and true forward forecast beyond the latest observed CPI value.
+- [ ] **Oil-price assumption layer**: for any forecast beyond observed WTI data, define oil scenarios instead of pretending WTI is known. Scenarios should include flat WTI, recent-trend WTI, ARIMA WTI forecast, and oil-literature-informed high/low shock paths.
+- [ ] **Model rerun**: apply ARIMAX, MIDAS nealmon, MIDAS nbeta, U-MIDAS, CLM-SS (12 lags), LASSO-MIDAS, Kernel U-MIDAS, XGBoost, and LSTM to the post-2022 extension where feasible.
+- [ ] **Metrics update**: compute RMSE, MAE, MASE, sMAPE, directional accuracy, large-move recall, and model ranking for the post-2022 period.
+- [ ] **Figures/tables**: generate a post-2022 forecast comparison chart, post-2022 RMSE table, scenario fan chart, and a before-vs-after ranking table.
+- [ ] **Thesis update**: revise Methodology, Results, Discussion, and Conclusion to distinguish pseudo-OOS validation from post-2022 external validation and true forward scenario forecasting.
+
 #### Final evaluation addendum — AIC/BIC, MASE, MAPE (done)
 
 - [x] Script saved: R/12_final_evaluation.R
@@ -269,23 +283,23 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
   - [x] Benchmark models: ARIMAX, nealmon, nbeta, U-MIDAS with equations
   - [x] CLM-SS formulation: Z matrix, AR(1) state, MLE via BFGS, identifiability
   - [x] Evaluation: expanding window, RMSE, MAE, MASE, sMAPE, DM test, directional accuracy, MZ test; MAPE reported with caveat
-- [ ] Chapter 4 — Results (4-5 pages):
+- [x] Chapter 4 — Results (4-5 pages):
   - [x] Table 1: In-sample AIC/BIC/RMSE generated for applicable models
   - [x] Table 2: OOS RMSE, MAE, MASE, MAPE/sMAPE, directional accuracy generated
-  - [ ] Table 3: Large-move precision and recall (Phase 7d)
+  - [x] Table 3: Large-move precision and recall (Phase 7d)
   - [x] Table 4: Performance vs interpretability trade-off generated (Phase 6d)
-  - [ ] Figure: CLM-SS composite link weights bar chart
-  - [ ] Figure: MIDAS lag weight hump (nealmon vs nbeta)
-  - [ ] Figure: OOS forecast comparison line chart
-- [ ] Chapter 5 — Discussion (2-3 pages):
-  - [ ] When does MIDAS beat ARIMAX, and why (timing information vs. aggregation)
-  - [ ] The MZ paradox: ARIMAX passes rationality test because it has no predictive power
-  - [ ] Forecast horizon validity: this is a nowcasting study, 1-month-ahead, consistent with Kilian and Lewis (2011)
-  - [ ] CLM-SS: free weights recover same hump as parametric MIDAS; AR errors add marginal value
-  - [ ] Limitations: ridge CV, LSTM data requirements, energy-only domain
-- [ ] Chapter 6 — Conclusions (1-2 pages):
-  - [ ] Main findings; CLM-SS as interpretable bridge between ARIMAX and MIDAS
-  - [ ] Future work: cross-validated ridge, multivariate extension, R package
+  - [x] Figure: CLM-SS composite link weights bar chart
+  - [x] Figure: MIDAS lag weight hump (nealmon vs nbeta)
+  - [x] Figure: OOS forecast comparison line chart
+- [x] Chapter 5 — Discussion (2-3 pages):
+  - [x] When does MIDAS beat ARIMAX, and why (timing information vs. aggregation)
+  - [x] The MZ paradox: ARIMAX passes rationality test because it has no predictive power
+  - [x] Forecast horizon validity: this is a nowcasting study, 1-month-ahead, consistent with Kilian and Lewis (2011)
+  - [x] CLM-SS: free weights recover same hump as parametric MIDAS; AR errors add marginal value
+  - [x] Limitations: ridge CV, LSTM data requirements, energy-only domain
+- [x] Chapter 6 — Conclusions (1-2 pages):
+  - [x] Main findings; CLM-SS as interpretable bridge between ARIMAX and MIDAS
+  - [x] Future work: cross-validated ridge, multivariate extension, R package
 - [ ] References (not in page count)
 - [ ] Annex A — Individual Contribution Statement (submitted separately)
 
@@ -327,8 +341,9 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 | Phase 7b — PCA on WTI lags | Done | PCA-ARIMAX only -4.3% vs ARIMAX; MIDAS nbeta remains -31.1% |
 | Phase 7c — Segmented regression | Done | MIDAS wins pre-COVID; XGBoost wins 2020; U-MIDAS wins recovery/spike |
 | Phase 7e — Forecast horizon validity | Done | h=1 main window (-31.1%); h=2 useful (-14.9%); h=3 fades (+2.2%) |
+| Phase 7f — Post-2022 future extension | To do | Refresh recent data, test 2023-2026 external holdout, and add scenario-based true forward forecasts |
 | Final evaluation addendum | Done | MIDAS nbeta wins AIC/BIC and OOS RMSE/MASE; MAPE reported but de-emphasized |
-| Phase 8 — Thesis writing | To do | Due 29 June 2026, 30 pages |
+| Phase 8 — Thesis writing | In progress | Revise after Phase 7f so chapters distinguish pseudo-OOS, external holdout, and true forward forecasting |
 | Phase 9 — Poster | To do | Due 29 June 2026, A0 PDF |
 | Phase 10 — Code cleanup | To do | |
 

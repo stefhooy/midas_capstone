@@ -1,0 +1,7 @@
+"Series","ADF_p_value","Interpretation"
+"CPI Energy levels",0.4644,"non-stationary"
+"CPI Energy log-diff",0.01,"stationary"
+"WTI weekly levels",0.0768,"non-stationary"
+"WTI weekly log-diff",0.01,"stationary"
+"IMF Energy levels",0.1206,"non-stationary"
+"IMF Energy log-diff",0.01,"stationary"
