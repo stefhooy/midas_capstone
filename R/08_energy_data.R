@@ -6,8 +6,8 @@
 #     FRED: CPIENGSL | Units: Index 1982-84=100
 #     → What US consumers pay for energy (gas, electricity, fuel)
 #
-# x = WTI Crude Oil Spot Price (daily → weekly)
-#     FRED: DCOILWTICO | Units: USD/barrel
+# x = WTI Crude Oil Spot Price (weekly)
+#     FRED: WCOILWTICO | Units: USD/barrel
 #     → High-frequency upstream driver, m = 4 (weekly/monthly)
 #
 # ctx = IMF Global Price of Energy Index (monthly)
@@ -16,7 +16,7 @@
 #
 # Transmission chain:
 #   Global energy prices (PNRGINDEXM)
-#     → WTI crude oil daily (DCOILWTICO)        [high-freq driver]
+#     → WTI crude oil weekly (WCOILWTICO)       [high-freq driver]
 #       → Consumer energy costs (CPIENGSL)       [monthly outcome]
 #
 # Sample: 2000-01 to 2022-12 | MIDAS ratio m = 4
@@ -41,7 +41,7 @@ sample_end   <- "2022-12-31"
 # ============================================================
 cat("Downloading from FRED...\n")
 getSymbols("CPIENGSL",   src = "FRED", from = sample_start, to = sample_end)
-getSymbols("DCOILWTICO", src = "FRED", from = sample_start, to = sample_end)
+getSymbols("WCOILWTICO", src = "FRED", from = sample_start, to = sample_end)
 getSymbols("PNRGINDEXM", src = "FRED", from = sample_start, to = sample_end)
 cat("Download complete.\n\n")
 
@@ -53,15 +53,13 @@ cat("CPI Energy (CPIENGSL):", nrow(cpi_raw), "monthly obs |",
     format(start(cpi_raw), "%Y-%m"), "to", format(end(cpi_raw), "%Y-%m"), "\n")
 cat("NAs:", sum(is.na(cpi_raw)), "\n")
 
-# ---- WTI Oil (daily → weekly) ------------------------------
-wti_daily <- DCOILWTICO
-colnames(wti_daily) <- "wti_usd_bbl"
-wti_daily  <- na.locf(wti_daily, na.rm = FALSE)   # fill weekends/holidays
-wti_daily  <- na.omit(wti_daily)
-wti_weekly <- apply.weekly(wti_daily, last)        # last price of each week
+# ---- WTI Oil (weekly) --------------------------------------
+wti_weekly <- WCOILWTICO
+colnames(wti_weekly) <- "wti_usd_bbl"
+wti_weekly <- na.locf(wti_weekly, na.rm = FALSE)
+wti_weekly <- na.omit(wti_weekly)
 wti_weekly <- window(wti_weekly, start = sample_start, end = sample_end)
-cat("\nWTI Oil (DCOILWTICO):", nrow(wti_daily), "daily obs →",
-    nrow(wti_weekly), "weekly obs\n")
+cat("\nWTI Oil (WCOILWTICO):", nrow(wti_weekly), "weekly obs\n")
 
 # ---- IMF Global Energy Index (monthly, context only) -------
 imf_raw <- PNRGINDEXM
@@ -171,7 +169,7 @@ render(function() {
        main = "US Consumer Energy CPI (monthly, SA) — CPIENGSL",
        xlab = "", ylab = "Index (1982-84=100)")
   plot(d_wti_lv, v_wti_lv, type = "l", col = "firebrick", lwd = 1,
-       main = "WTI Crude Oil Price (weekly) — DCOILWTICO",
+       main = "WTI Crude Oil Price (weekly) — WCOILWTICO",
        xlab = "", ylab = "USD/barrel")
   plot(d_imf_lv, v_imf_lv, type = "l", col = "darkorange", lwd = 1.5,
        main = "IMF Global Energy Price Index (monthly) — PNRGINDEXM",
@@ -246,15 +244,21 @@ saveRDS(cpi_raw,     "data/processed/cpi_energy_levels_monthly.rds")
 saveRDS(wti_weekly,  "data/processed/wti_levels_weekly.rds")
 saveRDS(imf_raw,     "data/processed/imf_energy_levels_monthly.rds")
 
+saveRDS(cpi_raw,     "data/raw/fred_CPIENGSL_historical.rds")
+saveRDS(wti_weekly,  "data/raw/fred_WCOILWTICO_historical.rds")
+saveRDS(wti_weekly,  "data/raw/fred_WTI_weekly_historical.rds")
+saveRDS(imf_raw,     "data/raw/fred_PNRGINDEXM_historical.rds")
+
 cat("\n=== Data documentation ===\n")
 cat("Source:      FRED — Federal Reserve Bank of St. Louis\n")
 cat("CPIENGSL:    Consumer Price Index, Energy (SA, monthly)\n")
 cat("             https://fred.stlouisfed.org/series/CPIENGSL\n")
-cat("DCOILWTICO:  WTI Crude Oil Spot Price (daily → weekly)\n")
-cat("             https://fred.stlouisfed.org/series/DCOILWTICO\n")
+cat("WCOILWTICO:  WTI Crude Oil Spot Price (weekly)\n")
+cat("             https://fred.stlouisfed.org/series/WCOILWTICO\n")
 cat("PNRGINDEXM:  IMF Global Price of Energy Index (monthly)\n")
 cat("             https://fred.stlouisfed.org/series/PNRGINDEXM\n")
 cat("Downloaded: ", format(Sys.Date(), "%d %B %Y"), "\n")
 cat("Sample:      2000-01 to 2022-12\n")
 cat("Transform:   Log-difference for stationarity\n")
-cat("MIDAS setup: y = CPIENGSL (monthly) | x = WTI (weekly) | m = 4\n")
+cat("MIDAS setup: y = CPIENGSL (monthly) | x = WCOILWTICO (weekly) | m = 4\n")
+cat("Raw caches:  data/raw/fred_*_historical.rds\n")

@@ -1,12 +1,12 @@
 Phase 7c - Segmented Regression and Regime Performance
 
-Best one-break date by AIC in y ~ WTI * post-break grid search: 2005-10.
+Best one-break date by AIC in y ~ WTI * post-break grid search: 2020-03.
 Candidate event breaks tested: 2008 GFC/oil shock, 2014-16 oil collapse, and 2020 COVID crash.
 
 Out-of-sample regime interpretation:
-- 2015-2019 pre-COVID: best RMSE model is MIDAS nealmon (RMSE 0.017826).
-- 2020 COVID: best RMSE model is XGBoost (RMSE 0.014157).
-- 2021-2022 recovery/spike: best RMSE model is U-MIDAS (RMSE 0.025287).
+- 2015-2019 pre-COVID: best RMSE model is LASSO-MIDAS (RMSE 0.018423).
+- 2020 COVID: best RMSE model is XGBoost (RMSE 0.014556).
+- 2021-2022 recovery/spike: best RMSE model is CLM-SS (12 lags) (RMSE 0.026461).
 
 Thesis takeaway:
 The MIDAS advantage is not purely a COVID artifact. MIDAS-type models remain

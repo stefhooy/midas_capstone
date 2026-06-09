@@ -37,10 +37,11 @@ cat("=== Phase 7f: Recent Data Refresh ===\n")
 cat("Download window:", format(sample_start), "to", format(download_end), "\n")
 cat("Original capstone sample ends:", format(original_end), "\n\n")
 
-# FRED sometimes returns temporary 504 gateway timeouts, especially for
-# daily series such as DCOILWTICO. Download each series separately, retry,
-# and cache successful downloads so a later failure does not force us to
-# start from zero.
+# FRED sometimes returns temporary 504 gateway timeouts. Download each
+# series separately, retry, and cache successful downloads so a later
+# failure does not force us to start from zero. For WTI, use FRED's
+# official weekly series (WCOILWTICO) directly; this matches the m = 4
+# weekly/monthly design and avoids the heavy daily endpoint.
 get_fred_cached <- function(symbol, cache_file, label,
                             max_tries = 4L, sleep_seconds = 8L) {
   for (attempt in seq_len(max_tries)) {
@@ -92,24 +93,11 @@ cpi_download <- get_fred_cached(
   "CPIENGSL"
 )
 
-wti_source <- "DCOILWTICO daily from FRED, converted to weekly last price"
-wti_download <- tryCatch(
-  get_fred_cached(
-    "DCOILWTICO",
-    "data/raw/fred_DCOILWTICO_latest.rds",
-    "DCOILWTICO"
-  ),
-  error = function(e) {
-    cat("\nDCOILWTICO daily download failed after retries.\n")
-    cat("Falling back to WCOILWTICO, FRED's official weekly WTI series.\n")
-    cat("Original error:", conditionMessage(e), "\n\n")
-    wti_source <<- "WCOILWTICO weekly from FRED fallback"
-    get_fred_cached(
-      "WCOILWTICO",
-      "data/raw/fred_WCOILWTICO_latest.rds",
-      "WCOILWTICO"
-    )
-  }
+wti_source <- "WCOILWTICO weekly from FRED"
+wti_download <- get_fred_cached(
+  "WCOILWTICO",
+  "data/raw/fred_WCOILWTICO_latest.rds",
+  "WCOILWTICO"
 )
 
 imf_download <- get_fred_cached(
@@ -127,14 +115,11 @@ cpi_raw <- cpi_download
 colnames(cpi_raw) <- "cpi_energy"
 cpi_raw <- window(cpi_raw, start = sample_start, end = download_end)
 
-wti_daily <- wti_download
-colnames(wti_daily) <- "wti_usd_bbl"
-wti_daily <- window(wti_daily, start = sample_start, end = download_end)
-wti_daily <- na.locf(wti_daily, na.rm = FALSE)
-wti_daily <- na.omit(wti_daily)
-
-wti_weekly <- apply.weekly(wti_daily, last)
+wti_weekly <- wti_download
+colnames(wti_weekly) <- "wti_usd_bbl"
 wti_weekly <- window(wti_weekly, start = sample_start, end = download_end)
+wti_weekly <- na.locf(wti_weekly, na.rm = FALSE)
+wti_weekly <- na.omit(wti_weekly)
 colnames(wti_weekly) <- "wti_usd_bbl"
 
 # Save the weekly WTI level series as a raw cache for the future-forecast
@@ -148,8 +133,8 @@ saveRDS(
     saved_on = Sys.Date(),
     note = paste(
       "Weekly WTI level series used for Phase 7f.",
-      "If DCOILWTICO daily is available, this is daily WTI converted to weekly last price.",
-      "If the daily endpoint times out, this is FRED WCOILWTICO official weekly WTI."
+      "Source is FRED WCOILWTICO, the official weekly WTI crude oil series.",
+      "This avoids DCOILWTICO daily endpoint timeouts and matches the m = 4 design."
     )
   ),
   "data/raw/fred_WTI_weekly_latest_with_metadata.rds"

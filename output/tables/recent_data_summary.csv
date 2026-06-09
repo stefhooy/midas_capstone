@@ -3,7 +3,7 @@
 "Original sample end","2022-12-31"
 "Latest CPI month","2026-04"
 "Latest WTI week","2026-05-29"
-"WTI source","WCOILWTICO weekly from FRED fallback"
+"WTI source","WCOILWTICO weekly from FRED"
 "WTI weekly raw cache","data/raw/fred_WTI_weekly_latest.rds"
 "Latest IMF month","2026-05"
 "Full monthly log-diff observations","313"

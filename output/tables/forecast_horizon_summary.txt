@@ -6,9 +6,9 @@ predict CPI Energy for month t, which is published after the month closes.
 For h=2 and h=3, the exercise becomes true forecasting: WTI information from
 one or two months earlier is used to predict a future CPI Energy release.
 
-At h=1, MIDAS nbeta reduces RMSE by 31.1% vs ARIMAX.
-At h=2, MIDAS nbeta reduces RMSE by 14.9% vs ARIMAX.
-At h=3, MIDAS nbeta is 2.2% worse than ARIMAX.
+At h=1, MIDAS nbeta reduces RMSE by 19.9% vs ARIMAX.
+At h=2, MIDAS nbeta reduces RMSE by 31.8% vs ARIMAX.
+At h=3, MIDAS nbeta is 10.7% worse than ARIMAX.
 
 Interpretation: the thesis should emphasize the h=1 result as the main
 validity window. This matches the empirical lag evidence found throughout

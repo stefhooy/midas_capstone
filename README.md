@@ -12,7 +12,7 @@
 | --- | --- |
 | Research question | Does CLM-SS (exact weekly aggregation + AR errors) improve monthly consumer energy price forecasts vs. models that pre-aggregate weekly oil data? |
 | **y (outcome)** | Monthly log-change in US Consumer Energy CPI (CPIENGSL, FRED). What US households pay for gasoline, heating oil, electricity. Published monthly. |
-| **x (predictor)** | Weekly log-change in WTI crude oil spot price (DCOILWTICO, FRED). Upstream commodity driver. 4 weekly obs per monthly CPI (m=4). |
+| **x (predictor)** | Weekly log-change in WTI crude oil spot price (WCOILWTICO, FRED). Upstream commodity driver. 4 weekly obs per monthly CPI (m=4). |
 | Context only | IMF Global Price of Energy Index (PNRGINDEXM, FRED). Used in Phase 3 EDA only. Not in any model. |
 | Original historical sample | Feb 2000 to Dec 2022. 275 monthly obs, 1199 weekly obs. |
 | Historical forecasting setup | Pseudo out-of-sample 1-step-ahead nowcasting. All 4 weekly WTI obs from month t are treated as available when forecasting CPI for month t after the month closes. |
@@ -121,7 +121,7 @@ midas_capstone/
 
 ### Phase 3 — Energy Dataset EDA (done)
 
-- [x] CPIENGSL + DCOILWTICO (daily to weekly, m=4) + PNRGINDEXM (context)
+- [x] CPIENGSL + WCOILWTICO (weekly WTI, m=4) + PNRGINDEXM (context)
 - [x] 275 monthly obs, 1199 weekly obs, 0 NAs, sample 2000-02 to 2022-12
 - [x] ADF tests: all non-stationary in levels, stationary in log-diff
 - [x] 5 EDA plots: levels, log-diff, ACF/PACF, STL decomp, transmission chain scatter
@@ -252,8 +252,8 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 
 *New extension after clarifying that the current OOS period is a historical pseudo out-of-sample backtest, not a forecast beyond the original dataset.*
 
-- [ ] **Data refresh**: download/update CPIENGSL, DCOILWTICO, and PNRGINDEXM from 2023 to the latest available date; save separately from the original 2000-2022 dataset.
-- [ ] **External holdout evaluation**: train final model specifications on the original 2000-2022 sample, then evaluate forecasts on post-2022 observations. This tests whether the original MIDAS result survives on genuinely later data.
+- [x] **Data refresh**: download/update CPIENGSL, WCOILWTICO, and PNRGINDEXM from 2023 to the latest available date; save separately from the original 2000-2022 dataset.
+- [x] **External holdout evaluation**: train final model specifications on the original 2000-2022 sample, then evaluate forecasts on post-2022 observations. This tests whether the original MIDAS result survives on genuinely later data.
 - [ ] **Forecast-origin audit**: clearly separate three cases: historical pseudo-OOS (2015-2022), post-2022 external holdout, and true forward forecast beyond the latest observed CPI value.
 - [ ] **Oil-price assumption layer**: for any forecast beyond observed WTI data, define oil scenarios instead of pretending WTI is known. Scenarios should include flat WTI, recent-trend WTI, ARIMA WTI forecast, and oil-literature-informed high/low shock paths.
 - [ ] **Model rerun**: apply ARIMAX, MIDAS nealmon, MIDAS nbeta, U-MIDAS, CLM-SS (12 lags), LASSO-MIDAS, Kernel U-MIDAS, XGBoost, and LSTM to the post-2022 extension where feasible.
@@ -279,7 +279,7 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 - [x] Chapter 1 — Introduction (2-3 pages): the mixed-frequency problem, thesis contributions, structure
 - [x] Chapter 2 — Literature Review (3-4 pages): Phase 1 text, already written
 - [x] Chapter 3 — Methodology (4-5 pages):
-  - [x] Data: CPIENGSL, DCOILWTICO, PNRGINDEXM; FRED sources; sample; log-diff transformation
+  - [x] Data: CPIENGSL, WCOILWTICO, PNRGINDEXM; FRED sources; sample; log-diff transformation
   - [x] Benchmark models: ARIMAX, nealmon, nbeta, U-MIDAS with equations
   - [x] CLM-SS formulation: Z matrix, AR(1) state, MLE via BFGS, identifiability
   - [x] Evaluation: expanding window, RMSE, MAE, MASE, sMAPE, DM test, directional accuracy, MZ test; MAPE reported with caveat
