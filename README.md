@@ -326,11 +326,11 @@ Note: The original Phase 6 (Simulation Study) has been replaced by this ML bench
 
 ### Phase 10 — Code and Documentation
 
-- [ ] set.seed(42) in all scripts (done in 09 and 07)
-- [ ] All output figures in output/figures/ (done)
-- [ ] All result tables in output/tables/ (done)
-- [ ] Update 00_setup.R with new packages: xgboost, torch or keras, segmented
-- [ ] GitHub commit all R scripts + Papers/ folder (22 MB, under 100 MB limit)
+- [x] set.seed(42) in all scripts (done in 09 and 07)
+- [x] All output figures in output/figures/ (done)
+- [x] All result tables in output/tables/ (done)
+- [x] Update 00_setup.R with new packages: xgboost, torch or keras, segmented
+- [x] GitHub commit all R scripts + Papers/ folder (22 MB, under 100 MB limit)
 
 ---
 
