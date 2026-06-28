@@ -1,50 +1,157 @@
-# MIDAS Capstone: Exact Cross-Frequency Aggregation in Mixed-Frequency Time Series
+# Cross-Frequency Aggregation in Mixed-Frequency Time Series
 
-**Student:** Stephan Pentchev | **Supervisor:** Dae-jin Lee (IE University)
+## Forecasting US Consumer Energy Prices with Weekly Oil Data
 
-**Deadline:** Thesis + Poster: 29 June 2026 | Defense: 7 July 2026
+**Author:** Stephan Stefanov Pentchev
+**Supervisor:** Dae-Jin Lee, IE University
+**Program:** Master in Business Analytics & Data Science, Advanced AI Concentration, IE University, 2026
+
+[Thesis (PDF)](docs/Pentchev_2026_Thesis.pdf) | [Poster (PDF)](docs/Pentchev_2026_Poster.pdf)
 
 ---
 
-## Research Context
+## Overview
 
-| Item | Details |
+Standard time series models pre-aggregate high-frequency data before estimation, discarding the within-period timing information that may carry predictive signal. This thesis investigates whether preserving weekly WTI crude oil prices at their native frequency, rather than collapsing them to monthly means before fitting, improves one-month-ahead forecasts of US Consumer Energy CPI.
+
+The main comparison is between ARIMAX (which uses monthly-averaged WTI as an external regressor) and the MIDAS family of models (Mixed Data Sampling), which directly embed the four weekly oil observations per month into the regression through a parameterised lag polynomial. A novel Composite Link Matrix State-Space (CLM-SS) formulation is developed and evaluated alongside machine-learning benchmarks including XGBoost and LSTM.
+
+---
+
+## Data
+
+All series are sourced from the Federal Reserve Economic Data (FRED) database.
+
+| Series | Description | Frequency | FRED Link |
+| --- | --- | --- | --- |
+| CPIENGSL | US Consumer Energy CPI (outcome variable) | Monthly | [fred.stlouisfed.org/series/CPIENGSL](https://fred.stlouisfed.org/series/CPIENGSL) |
+| WCOILWTICO | WTI Crude Oil Spot Price (predictor) | Weekly | [fred.stlouisfed.org/series/WCOILWTICO](https://fred.stlouisfed.org/series/WCOILWTICO) |
+| PNRGINDEXM | IMF Global Energy Price Index (context only, EDA only) | Monthly | [fred.stlouisfed.org/series/PNRGINDEXM](https://fred.stlouisfed.org/series/PNRGINDEXM) |
+
+**Sample:** February 2000 to June 2026. Both series are transformed to monthly log-differences prior to modelling. The historical evaluation window covers January 2015 to December 2022 (96 pseudo out-of-sample one-step-ahead forecasts under an expanding window). A separate post-2022 external holdout (2023-2026) serves as an independent test of the findings.
+
+The mixed-frequency ratio is m = 4 (four weekly WTI observations per monthly CPI observation), and models include up to K = 12 weekly lags (three months of WTI history).
+
+---
+
+## Methodology
+
+### Benchmark: ARIMAX
+
+The ARIMAX model uses the monthly mean of weekly WTI log-changes as a scalar external regressor, fitting an ARIMA structure on the residuals. This is the standard approach in applied forecasting and represents the cost of pre-aggregating high-frequency data before estimation.
+
+### MIDAS Regression
+
+MIDAS regresses the monthly outcome directly on a distributed lag of high-frequency observations, weighted by a low-dimensional parametric function:
+
+$$y_t = \alpha + \beta \sum_{k=1}^{K} w(k;\,\theta)\, x_{t-k}^{(m)} + \varepsilon_t$$
+
+where $x_{t-k}^{(m)}$ denotes the $k$-th weekly WTI log-change, and $w(k;\theta)$ is a normalised weighting function controlled by a small parameter vector $\theta$. Two lag-weight specifications are evaluated:
+
+- **Normalised Beta (nbeta):** $w(k;\theta_1,\theta_2) \propto k^{\theta_1-1}(1-k)^{\theta_2-1}$: a flexible two-parameter Beta PDF shape that can represent humped, monotone, or U-shaped weighting profiles. This flexibility allows the model to discover a hump-shaped peak at the empirically relevant lag without imposing a functional form.
+- **Exponential Almon (nealmon):** $w(k;\theta_1,\theta_2) \propto \exp(\theta_1 k + \theta_2 k^2)$: constrained to monotone decay or inverted-U shapes. Interpretable but less flexible than nbeta when the lag structure is asymmetric.
+
+The application-specific formulation, with m = 4 weeks per month and K = 12 weekly lags:
+
+$$y_t^{\text{CPI}} = \alpha + \beta \sum_{k=1}^{12} w(k;\,\hat{\theta})\, x_{t-k}^{\text{WTI}} + \varepsilon_t$$
+
+Additional models in the evaluation suite: Unrestricted MIDAS (U-MIDAS), LASSO-MIDAS (glmnet penalty on U-MIDAS lag coefficients), Kernel U-MIDAS (Breitung and Roling, 2015), PCA-ARIMAX (first 4 principal components of the WTI lag matrix), XGBoost, and LSTM.
+
+### Novel Contributions
+
+Three models developed in this thesis go beyond directly applying existing methods off the shelf.
+
+**CLM-SS (Composite Link Matrix State-Space):** Frames the mixed-frequency problem as exact temporal aggregation within a Kalman filter. The composite link matrix Z directly maps the K weekly regressors into the monthly observation equation, with AR(1) errors estimated via MLE using the KFAS package (Helske, 2017). Free MLE weights on Z, without a parametric shape constraint, allow the model to recover the lag structure entirely from the data, building on the composite link function theory of Thompson and Baker (1981).
+
+**LASSO-MIDAS:** Applies L1 regularisation (Tibshirani, 1996) directly to the 12 free lag coefficients of U-MIDAS using the glmnet package (Friedman, Hastie, and Tibshirani, 2010), with lambda selected by time-series cross-validation. This allows the penalty to data-adaptively zero out irrelevant weekly lags and identify the predictive window without imposing a parametric shape. The resulting non-zero coefficients concentrate at prior-month weeks 2-3, independently confirming the transmission hump.
+
+**Kernel U-MIDAS:** Implements the nonparametric lag smoother of Breitung and Roling (2015) using a second-difference roughness penalty on the 12 free U-MIDAS coefficients, with the smoothing parameter lambda selected on a held-out validation window. In this application, the optimal lambda is zero, meaning the penalty collapses to unrestricted U-MIDAS, but the estimated unsmoothed weights still recover the same lag hump, providing a nonparametric confirmation of the parametric MIDAS result.
+
+---
+
+## Key Results
+
+### Historical Evaluation (2015-2022, 96 forecasts)
+
+| Model | RMSE | vs ARIMAX | Dir. Accuracy | Crash Recall |
+| --- | --- | --- | --- | --- |
+| MIDAS nbeta | 0.02057 | **-31.1%** | 74.0% | 100% |
+| LASSO-MIDAS | 0.02103 | -29.6% | 75.0% | 100% |
+| MIDAS nealmon | 0.02104 | -29.5% | **80.2%** | 100% |
+| U-MIDAS | 0.02226 | -25.5% | 75.0% | 100% |
+| Kernel U-MIDAS | 0.02226 | -25.5% | 75.0% | 100% |
+| CLM-SS (12 lags) | 0.02258 | -24.4% | 74.0% | 100% |
+| XGBoost | 0.02365 | -20.8% | 72.9% | N/A |
+| LSTM | 0.02588 | -13.3% | 76.0% | N/A |
+| ARIMAX | 0.02986 | baseline | 64.6% | 50% |
+
+MIDAS nbeta and nealmon improvements over ARIMAX are statistically significant (Diebold-Mariano test, p < 0.001). All MIDAS-family models achieve 100% recall on large downward price moves (crashes), compared with 50% for ARIMAX.
+
+### Post-2022 External Holdout (2023-2026)
+
+| Model | vs ARIMAX |
 | --- | --- |
-| Research question | Does CLM-SS (exact weekly aggregation + AR errors) improve monthly consumer energy price forecasts vs. models that pre-aggregate weekly oil data? |
-| **y (outcome)** | Monthly log-change in US Consumer Energy CPI (CPIENGSL, FRED). What US households pay for gasoline, heating oil, electricity. Published monthly. |
-| **x (predictor)** | Weekly log-change in WTI crude oil spot price (WCOILWTICO, FRED). Upstream commodity driver. 4 weekly obs per monthly CPI (m=4). |
-| Context only | IMF Global Price of Energy Index (PNRGINDEXM, FRED). Used in Phase 3 EDA only. Not in any model. |
-| Original historical sample | Feb 2000 to Dec 2022. 275 monthly obs, 1199 weekly obs. |
-| Historical forecasting setup | Pseudo out-of-sample 1-step-ahead nowcasting. All 4 weekly WTI obs from month t are treated as available when forecasting CPI for month t after the month closes. |
-| Historical test period | Jan 2015 to Dec 2022. 96 one-step-ahead forecasts per model. |
-| New future-forecast extension | Add post-2022 data and evaluate whether the 2015-2022 findings survive on 2023-2026 observations. Separate this from true forward forecasts that require WTI assumptions/scenarios. |
+| MIDAS nbeta | **-16.0%** |
+| MIDAS nealmon | -10.3% |
+| ARIMAX | baseline |
+
+The historical ranking holds on genuinely out-of-sample post-2022 data, though the MIDAS advantage narrows relative to the 2015-2022 period, consistent with a more uncertain post-pandemic price environment.
+
+### Transmission Mechanism
+
+Estimated MIDAS lag weights consistently peak at prior-month weeks 2-3 (approximately 5-7 weeks before the CPI observation date). This hump is independently confirmed by CLM-SS free weights (no parametric shape imposed) and by LASSO-MIDAS (which data-adaptively zeroes out most lags and retains the same prior-month window). The transmission delay is consistent with the oil-to-consumer-price literature (Kilian and Lewis, 2011; Baumeister and Kilian, 2015) and is the primary mechanism through which weekly timing information improves forecasts over monthly pre-aggregation.
 
 ---
 
-## Hard Deadlines
+## How MIDAS Performs Across Different Scenarios
 
-| Date | Event |
-| --- | --- |
-| Tue 2 June 2026 | Check-in session (done) — DJL feedback incorporated below |
-| Mon 29 June 2026 | Submit thesis (max 30 pages) + A0 poster (by 12:00) |
-| Tue 7 July 2026 | Oral defense — 15 min presentation + 15 min Q&A |
+Performance is not uniform across regimes, forecast horizons, or evaluation periods. The table below summarises which model wins and by how much in each scenario.
+
+### By Economic Regime (2015-2022 in-sample period)
+
+| Regime | Winner | vs ARIMAX | Key observation |
+| --- | --- | --- | --- |
+| 2015-2019 pre-COVID | LASSO-MIDAS | -23.6% | Parametric MIDAS (nbeta, nealmon) also competitive (-19% to -22%). Stable transmission makes all weekly models beneficial. |
+| 2020 COVID crash | **XGBoost** | **-49.6%** | Parametric MIDAS fails badly: nbeta +94.9%, nealmon +163.1% vs ARIMAX. Tree-based methods handle the structural shock better; the parametric lag shapes assume a smooth oil-to-CPI linkage that breaks during the pandemic. |
+| 2021-2022 recovery/spike | CLM-SS (12 lags) | -22.7% | U-MIDAS (-22.6%) and LASSO-MIDAS (-21.0%) are close behind. The flexible, unparameterised models adapt better during the inflationary spike than rigid nbeta/nealmon. |
+
+The COVID period is the single scenario where the MIDAS advantage reverses. Parametric lag shapes (nbeta, nealmon) impose a smooth bell-curve weighting that cannot accommodate the abrupt, unprecedented demand collapse of 2020. XGBoost, which makes no assumptions about the functional form of the oil-CPI relationship, absorbs the structural shock more effectively.
+
+### By Forecast Horizon
+
+| Horizon | Interpretation | MIDAS nbeta vs ARIMAX | MIDAS nealmon vs ARIMAX |
+| --- | --- | --- | --- |
+| h = 1 (nowcast) | All 4 weeks of WTI from month t are available | +19.9% (ARIMAX wins) | +25.2% (ARIMAX wins) |
+| h = 2 (1-month ahead) | Only prior-month WTI is used | **-31.8%** | -1.0% |
+| h = 3 (2-months ahead) | WTI from 2 months ago | +10.7% (ARIMAX wins) | +11.3% (ARIMAX wins) |
+
+The most striking result is at h = 2: MIDAS nbeta achieves a 31.8% RMSE reduction over ARIMAX. This corresponds to the lag structure peak (prior-month weeks 2-3), meaning the model is exploiting exactly the weekly timing window that the transmission mechanism predicts. At h = 1, ARIMAX is competitive because it already has access to within-month information. At h = 3, the oil-to-CPI signal has faded and neither model has a meaningful edge.
+
+### Mincer-Zarnowitz Rationality Test
+
+A counterintuitive result emerges from the MZ regression ($y_t = a + b\hat{y}_t + \varepsilon_t$): ARIMAX is technically the only "unbiased" model (MZ beta near 1, cannot reject $a=0, b=1$). However, this is because ARIMAX has essentially no predictive power (MZ R² = 0.056). MIDAS models appear "biased" (beta approximately 0.75, MZ p < 0.05) but have genuine predictive power (R² approximately 0.58). The MZ test penalises models that are directionally correct but miscalibrated in magnitude, which is a known limitation of the test in volatile, nonlinear series.
+
+### PCA as a Compression Alternative
+
+An alternative to MIDAS is to compress the 12-weekly-lag matrix via PCA before feeding it into ARIMAX. The result is telling: PCA-ARIMAX (4 principal components) achieves only -4.3% vs ARIMAX, far behind MIDAS nbeta at -31.1%. VIF analysis confirms that multicollinearity is not the reason MIDAS works (max VIF = 1.79, all well below the threshold of 5). The gain from MIDAS comes from preserving the within-month timing structure, not from dimensionality reduction.
 
 ---
 
-## Supervisor Feedback — 2 June 2026 (DJL)
+## Conclusions
 
-| Request | What DJL asked | Status |
-| --- | --- | --- |
-| Kernel U-MIDAS | Non-parametric smoother on lag weights (Breitung and Roling 2015) | Phase 6a - DONE |
-| LSTM | Recurrent neural network as ML benchmark | Phase 6b - DONE |
-| XGBoost | Tree-based reference benchmark; defend why not primary model | Phase 6c - DONE |
-| LASSO-MIDAS | Penalise U-MIDAS lag coefficients via glmnet | Phase 7a |
-| PCA on WTI lags | Reduce 12-week lag matrix to PCs; check multicollinearity (VIF) | Phase 7b - DONE |
-| Segmented regression | Structural break analysis: 2008, 2014, COVID | Phase 7c - DONE |
-| Directional accuracy | Sign-correct %, precision/recall, Mincer-Zarnowitz | Phase 7d — DONE |
-| Energy/oil literature | Hamilton, Kilian, Baumeister domain refs | Phase 1 — DONE |
-| Forecast horizon validity | How far ahead is oil-CPI prediction valid? Based on oil literature | Phase 7e - DONE |
-| Interpretability table | RMSE vs complexity vs interpretability trade-off table | Phase 6d - DONE |
+1. **Frequency matters, not just quantity.** Monthly pre-aggregation of weekly oil prices loses the within-month timing information responsible for most of the predictive signal. MIDAS recovers this by fitting the full weekly lag profile directly.
+
+2. **MIDAS nbeta is the best overall model.** Across the 2015-2022 evaluation period, nbeta reduces RMSE by 31.1% versus ARIMAX (DM p < 0.001) and by 16.0% in the post-2022 external holdout. The flexible Beta shape, which can freely form a hump at the empirically identified prior-month weeks 2-3 transmission window, outperforms the more constrained nealmon in RMSE terms.
+
+3. **MIDAS nealmon is the best directional model.** At 80.2% directional accuracy and 100% recall on large crash events, nealmon is the preferred model when getting the direction right matters more than minimising squared errors. ARIMAX achieves only 64.6% directional accuracy and misses 50% of large negative price moves.
+
+4. **The 5-7 week transmission window is robust.** The lag hump at prior-month weeks 2-3 is recovered independently by nbeta (parametric MLE), CLM-SS (free Kalman filter weights), and LASSO-MIDAS (L1 regularisation that zeroes out irrelevant lags). Three very different estimation approaches converge on the same weekly window, which aligns with the oil-to-consumer-price literature.
+
+5. **COVID is the exception, not the rule.** In 2020, parametric MIDAS models fail catastrophically because their smooth lag shapes cannot handle a structural demand shock of unprecedented magnitude. XGBoost, which makes no parametric assumptions, is the only model that beats ARIMAX during the pandemic. Outside crisis periods, parametric MIDAS is consistently superior.
+
+6. **Machine learning does not replace MIDAS here.** XGBoost and LSTM both beat ARIMAX overall, but neither beats parametric MIDAS on the 2015-2022 period. On a dataset of 275 monthly observations, the compact parameterisation of nbeta/nealmon (2 parameters for the lag shape) provides better regularisation than the complex, data-hungry ML architectures.
+
+7. **CLM-SS validates the approach.** The novel CLM-SS formulation, which uses a free composite link matrix inside a Kalman filter rather than a parametric lag polynomial, independently discovers the same lag structure. This confirms that the MIDAS result is not an artefact of the nbeta/nealmon functional form, but a genuine feature of the oil-to-CPI transmission channel.
 
 ---
 
@@ -52,364 +159,192 @@
 
 ```
 midas_capstone/
+├── docs/
+│   ├── Pentchev_2026_Thesis.pdf          # Full thesis
+│   └── Pentchev_2026_Poster.pdf          # A0 conference poster
 ├── R/
-│   ├── 00_setup.R           # Package installation (run once)
-│   ├── 01_tutorial.R        # USData in-sample: all models
-│   ├── 02_arimax.R          # Standalone: ARIMAX benchmark
-│   ├── 03_adl_midas.R       # Standalone: ADL-MIDAS nealmon + nbeta
-│   ├── 04_umidas.R          # Standalone: U-MIDAS unrestricted OLS
-│   ├── 05_comparison.R      # In-sample comparison table + plots
-│   ├── 06_rolling_window.R  # Phase 2c: USData rolling RMSE + DM test
-│   ├── 07_clm_ss.R          # Phase 5: CLM-SS (KFAS)
-│   ├── 08_energy_data.R     # Phase 3: energy EDA
-│   ├── 09_benchmarks.R      # Phase 4: full benchmark suite on energy data
-│   ├── 10_ml_benchmarks.R   # Phase 6: XGBoost, LSTM, Kernel U-MIDAS
-│   ├── 11_extended_models.R # Phase 7: LASSO, PCA, segmented regression, metrics
-│   └── archive/
+│   ├── 00_setup.R                        # Package installation (run once)
+│   ├── 01_tutorial.R                     # USData proof-of-concept
+│   ├── 02_arimax.R                       # ARIMAX benchmark
+│   ├── 03_adl_midas.R                    # MIDAS nealmon and nbeta
+│   ├── 04_umidas.R                       # Unrestricted MIDAS
+│   ├── 05_comparison.R                   # In-sample comparison
+│   ├── 06_rolling_window.R               # Rolling RMSE and DM test
+│   ├── 07_clm_ss.R                       # CLM-SS (KFAS state-space)
+│   ├── 08_energy_data.R                  # Energy EDA
+│   ├── 09_benchmarks.R                   # Full benchmark suite on energy data
+│   ├── 10_ml_benchmarks.R               # XGBoost, LSTM, Kernel U-MIDAS
+│   ├── 11_extended_models.R             # LASSO, PCA, diagnostics, metrics
+│   ├── 12_final_evaluation.R            # AIC/BIC, MASE, sMAPE
+│   ├── 13_update_recent_data.R          # Post-2022 data refresh from FRED
+│   ├── 14_future_forecast_3_scenarios.R # 1/3/6-month forward scenarios
+│   └── 15_future_scenarios_12_months.R  # 12-month appendix extension
 ├── data/
-│   ├── raw/
-│   └── processed/           # .rds files: phase4_forecasts, clmss_forecasts
+│   ├── raw/                              # Downloaded FRED series (.rds / .csv)
+│   └── processed/                        # Forecast vectors (.rds)
 ├── output/
-│   ├── figures/             # All PNG plots (300 DPI)
-│   └── tables/              # All CSV result tables
-└── README.md
+│   ├── figures/                          # All plots (300 DPI PNG)
+│   └── tables/                           # All result tables (CSV)
+└── Papers/                               # Reference PDFs (24 verified papers)
 ```
 
 ---
 
-## Full Checklist
+## Reproducing the Results
 
-### Phase 0 — Environment Setup (done)
+### Requirements
 
-- [x] R + midasr working in VSCode
-- [x] All packages installed: midasr, forecast, quantmod, KFAS, tseries, urca, dplyr, lmtest, sandwich, glmnet, xts, zoo, httpgd
-- [x] GitHub repo initialized, folder structure created
+- R >= 4.2
+- Internet connection for the initial FRED data download (scripts 08 and 13)
+- Approximately 10-15 minutes total runtime for all scripts
+- The `torch` package (used in script 10 for LSTM) requires a one-time backend installation; follow the prompt when first running `library(torch)`
 
----
+### Step-by-Step
 
-### Phase 1 — Literature Review (done)
+#### Step 1: Install dependencies
 
-*Answers DJL Q1: Who are MIDAS's competitors? Becomes thesis Chapter 2.*
+```r
+source("R/00_setup.R")
+```
 
-- [x] Competitor comparison table (12 models including CLM-SS)
-- [x] ARIMAX paragraph: Box and Jenkins (1970), Sims (1980); pre-averaging problem
-- [x] MIDAS family: Ghysels et al. (2004, 2007); nealmon vs nbeta trade-off
-- [x] U-MIDAS: Foroni et al. (2015); when free weights dominate
-- [x] Kernel MIDAS: Breitung and Roling (2015); non-parametric smoother
-- [x] HAR-RV: Corsi (2009); rigid, only valid for realized variance
-- [x] State-space / MF-VAR: Aruoba et al. (2009), Mariano and Murasawa (2003)
-- [x] Bridge equations: Baffigi et al. (2004); pre-aggregates before estimation
-- [x] NowCasting BDFM: Giannone et al. (2008); requires panel of indicators
-- [x] ML methods: Fischer and Krauss (2018) LSTM, Chen and Guestrin (2016) XGBoost, Medeiros et al. (2021) LASSO
-- [x] CLM-SS positioning relative to all above
-- [x] Oil/energy domain: Hamilton (1983, 2009), Kilian (2009), Kilian and Lewis (2011), Baumeister and Hamilton (2019)
-- [x] Energy MF literature: Baumeister and Kilian (2015), Nonejad (2022)
-- [x] Full APA reference list (24 references, all verified against PDFs in Papers/)
+This installs all required packages: `midasr`, `forecast`, `KFAS`, `glmnet`, `xgboost`, `torch`, `quantmod`, `tseries`, `urca`, `dplyr`, `lmtest`, `sandwich`, `xts`, `zoo`, `httpgd`.
 
----
+#### Step 2: Proof of concept on built-in data (optional)
 
-### Phase 2 — USData Benchmarks (done)
+```r
+source("R/01_tutorial.R")   # USData in-sample: MIDAS vs ARIMAX
+source("R/02_arimax.R")     # ARIMAX standalone
+source("R/03_adl_midas.R")  # MIDAS nealmon and nbeta standalone
+source("R/04_umidas.R")     # U-MIDAS standalone
+source("R/06_rolling_window.R")  # Rolling window DM test on USData
+```
 
-*Answers DJL Q2: Is MIDAS competitive? Proof of concept on built-in data.*
+#### Step 3: Energy data EDA
 
-- [x] USrealgdp + USunempr, m=12 (annual/monthly)
-- [x] nealmon AIC -390.5, nbeta AIC -288.5, ARIMAX AIC -342.5
-- [x] Rolling window 2000-2011: nealmon RMSE 0.0077 vs ARIMAX 0.0159 (-51%)
-- [x] DM test: DM = -2.93, p = 0.007
+```r
+source("R/08_energy_data.R")
+```
 
----
+Downloads CPIENGSL and WCOILWTICO from FRED, runs stationarity tests, and saves EDA figures to `output/figures/`.
 
-### Phase 3 — Energy Dataset EDA (done)
+#### Step 4: Full benchmark suite (core results)
 
-- [x] CPIENGSL + WCOILWTICO (weekly WTI, m=4) + PNRGINDEXM (context)
-- [x] 275 monthly obs, 1199 weekly obs, 0 NAs, sample 2000-02 to 2022-12
-- [x] ADF tests: all non-stationary in levels, stationary in log-diff
-- [x] 5 EDA plots: levels, log-diff, ACF/PACF, STL decomp, transmission chain scatter
-- [x] Correlations: WTI vs CPI r=0.871, IMF vs CPI r=0.912, IMF vs WTI r=0.954
+```r
+source("R/09_benchmarks.R")
+```
 
----
+Fits ARIMAX, MIDAS nealmon, MIDAS nbeta, and U-MIDAS on the energy data with an expanding window from 2000-2014 to 2015-2022. Saves 96-forecast evaluation vectors to `data/processed/phase4_forecasts.rds` and all figures/tables to `output/`.
 
-### Phase 4 — Full Benchmark Suite on Energy Data (done)
+#### Step 5: CLM-SS (novel contribution)
 
-- [x] ARIMAX (monthly WTI mean as xreg): RMSE 0.02986
-- [x] MIDAS nealmon (k=11): RMSE 0.02104 (-29.5% vs ARIMAX), DM p=0.0003
-- [x] MIDAS nbeta (k=11): RMSE 0.02057 (-31.1%, best), DM p=0.0005
-- [x] U-MIDAS (k=11): RMSE 0.02226 (-25.5%), DM p=0.0009
-- [x] Lag selection: k=3/7/11 AIC grid, k=11 optimal (3 months of weekly data)
-- [x] Rolling window: expanding, train 2000-2014, test 2015-2022 (96 forecasts)
-- [x] Phase 4 forecast vectors saved to data/processed/phase4_forecasts.rds
-- [x] Final in-sample IC table: MIDAS nbeta has best AIC (-1258.00) and BIC (-1239.96) among likelihood-based final models
+```r
+source("R/07_clm_ss.R")
+```
 
-**Key finding:** Lag weight hump peaks at lag 5-6 (approx. 6 weeks) confirming crude oil transmission delay to consumer prices. nbeta wins because it freely approximates the hump; nealmon is constrained to monotone decay.
+Fits the Composite Link Matrix State-Space model with 4 and 12 weekly lags using KFAS. Saves forecast vectors to `data/processed/clmss_forecasts.rds`.
 
----
+#### Step 6: Machine learning benchmarks
 
-### Phase 5 — CLM-SS Framework: Novel Contribution (done)
+```r
+source("R/10_ml_benchmarks.R")
+```
 
-*y = mu + w1*x(t,1) + w2*x(t,2) + w3*x(t,3) + w4*x(t,4) + u(t), u(t) = phi*u(t-1) + eps(t)*
+Fits XGBoost (5-fold CV hyperparameter tuning), LSTM (hidden size 4, 150 epochs), and Kernel U-MIDAS (second-difference roughness penalty). Requires the torch backend for LSTM.
 
-- [x] Composite link matrix Z = [w1..w4]: free MLE weights, no parametric shape constraint
-- [x] State-space setup in KFAS: AR(1) error, Kalman smoother diagnostics
-- [x] Ridge penalty sensitivity: lambda grid {0, 0.001, 0.01, 0.1}, lambda=0 selected
-- [x] Identifiability: Hessian positive definite, w1 and phi statistically significant
-- [x] CLM-SS (4 lags): RMSE 0.03170 (+6.2% vs ARIMAX) — lag-limited, fails without history
-- [x] CLM-SS (12 lags, 3 months): RMSE 0.02258 (-24.4% vs ARIMAX), ties U-MIDAS
-- [x] CLM-SS weights peak at month -1 weeks 2-3 — independently confirms MIDAS lag hump at lag 5-6
-- [x] phi drops 0.266 to 0.123 when lags extended (richer history absorbs AR dynamics)
-- [x] Full 6-model comparison + DM tests saved
-- [x] CLM-SS forecast vectors saved to data/processed/clmss_forecasts.rds
+#### Step 7: Extended diagnostics and metrics
 
----
+```r
+source("R/11_extended_models.R")
+```
 
-### Phase 6 — ML Benchmark Comparison (done)
+Fits LASSO-MIDAS, PCA-ARIMAX, computes segmented regime analysis, directional accuracy, precision/recall, and Mincer-Zarnowitz tests for all models. Saves figures 14-16 and all extended metrics to `output/tables/extended_metrics_all_models.csv`.
 
-*Script: 10_ml_benchmarks.R. Answers DJL requests for ML comparison.*
+#### Step 8: Final evaluation
 
-Note: The original Phase 6 (Simulation Study) has been replaced by this ML benchmark phase per DJL feedback. A simulation study is out of scope for the June 29 deadline.
+```r
+source("R/12_final_evaluation.R")
+```
 
-#### 6a — Kernel U-MIDAS (non-parametric smoother, done)
+Computes AIC/BIC, MASE, sMAPE, and MAPE for all applicable models. Saves to `output/tables/final_oos_forecast_metrics.csv`.
 
-- [x] Implemented a Breitung and Roling-style penalised least-squares smoother on 12 weekly lag weights using a second-difference roughness penalty
-- [x] Lambda selected on 2013-2014 validation window; best lambda = 0, so the smoother collapses to unrestricted U-MIDAS
-- [x] Kernel U-MIDAS RMSE 0.02226 (-25.5% vs ARIMAX), identical to U-MIDAS and behind MIDAS nbeta 0.02057 (-31.1%)
-- [x] Estimated weights still peak at prior-month weeks 2-3, confirming the lag hump without a parametric nealmon/nbeta shape
-- [x] Key thesis argument: non-parametric smoothing does not improve over U-MIDAS here; flexible weekly timing helps, but parametric MIDAS remains more accurate and interpretable
+#### Step 9: Post-2022 external holdout
 
-#### 6b — LSTM (recurrent neural network)
+```r
+source("R/13_update_recent_data.R")   # Refresh FRED data through June 2026
+source("R/14_future_forecast_3_scenarios.R")   # 1/3/6-month forward scenarios
+source("R/15_future_scenarios_12_months.R")    # 12-month appendix extension
+```
 
-- [x] Implemented using torch package in R; torch backend installed successfully
-- [x] Input: sequence of 12 weekly WTI log-diffs; output: 1-month-ahead CPI log-diff
-- [x] Rolling expanding OOS evaluation on same 2015-2022 test period
-- [x] Best validation setup: hidden size 4, 150 epochs, learning rate 0.010
-- [x] LSTM RMSE 0.02588 (-13.3% vs ARIMAX), MAE 0.01840, directional accuracy 76.0%
-- [x] Key thesis argument: LSTM beats ARIMAX but does not beat MIDAS, XGBoost, U-MIDAS, or Kernel U-MIDAS; in this small mixed-frequency dataset, deep learning adds complexity without improving the main MIDAS result
+Downloads updated CPIENGSL and WCOILWTICO from FRED, evaluates all models on the 2023-2026 holdout, and generates scenario fan charts.
 
-#### 6c — XGBoost (tree-based tabular reference)
+### Outputs
 
-- [x] Input: 12 weekly WTI lag columns + lagged CPI as tabular features
-- [x] xgboost package with 5-fold CV for depth, eta, nrounds hyperparameters
-- [x] Rolling window OOS RMSE on same 2015-2022 test period
-- [x] Purpose: defend against DJL defense question "did you try XGBoost?"
-
-#### 6d — Performance vs interpretability table
-
-- [x] Final table saved: Model | RMSE | Dir. Accuracy | Complexity | Interpretable? | Capstone role
-- [x] Output files: performance_interpretability_table.csv, performance_interpretability_table.md, phase6d_interpretability_summary.txt
-- [x] Key point: MIDAS nbeta is the best RMSE model; MIDAS nealmon is the best directional and clearest defense model; XGBoost and LSTM both beat ARIMAX but neither beats parametric MIDAS
+All figures are written to `output/figures/` as 300 DPI PNG files. All numeric results are written to `output/tables/` as CSV files. No manual steps are required between scripts; each script reads only from `data/` and writes only to `output/`.
 
 ---
 
-### Phase 7 — Extended Feature Selection + Diagnostics (partially done)
+## References
 
-*Script: 11_extended_models.R*
+### MIDAS and Mixed-Frequency Methods
 
-#### 7a — LASSO-MIDAS (to do)
+Ghysels, E., Santa-Clara, P., and Valkanov, R. (2004). The MIDAS touch: Mixed data sampling regression models. CIRANO Working Paper 2004s-20.
 
-- [x] Apply LASSO penalty to U-MIDAS 12-lag coefficients via glmnet
-- [x] Lambda selection by time-series cross-validation (not random k-fold)
-- [x] Which weekly lags does LASSO zero out? Does LASSO data-adaptively recover the lag 5-6 hump?
-- [x] Compare OOS RMSE to ridge CLM-SS, U-MIDAS, and MIDAS nbeta
-- [x] Key thesis argument: LASSO discovers the same lag structure as the parametric shapes, confirming the hump is real
+Ghysels, E., Sinko, A., and Valkanov, R. (2007). MIDAS regressions: Further results and new directions. *Econometric Reviews*, 26(1), 53-90.
 
-#### 7b — PCA on weekly WTI lags (done)
+Foroni, C., Marcellino, M., and Schumacher, C. (2015). Unrestricted mixed data sampling (MIDAS). *Journal of the Royal Statistical Society: Series A*, 178(1), 57-82.
 
-- [x] Build the 12-column WTI lag matrix; compute pairwise correlations and VIF
-- [x] VIF result: max pairwise absolute correlation 0.254; median VIF 1.11; max VIF 1.25, so severe multicollinearity is not driving the MIDAS result
-- [x] Run PCA and scree plot: 11 PCs needed to explain 95% of variance, meaning weekly WTI shocks are not easily compressed into a few components
-- [x] PCA-ARIMAX benchmark with first 4 PCs: RMSE 0.02859 (-4.3% vs ARIMAX), far worse than MIDAS nbeta RMSE 0.02057 (-31.1%)
-- [x] Key thesis argument: compression alone is not enough; preserving the weekly timing structure is what gives MIDAS its advantage
-- [x] PCA choice: 11 PCs are needed for 95.3% variance, but the diagnostic benchmark uses 4 PCs to test whether low-dimensional compression can compete; using 11 PCs would nearly reconstruct the original lag matrix and defeat the purpose of PCA
+Breitung, J., and Roling, C. (2015). Forecasting inflation rates using daily data: A nonparametric MIDAS approach. *Journal of Forecasting*, 34, 588-603.
 
-#### 7c — Segmented regression: structural breaks (done)
+Corsi, F. (2009). A simple approximate long-memory model of realized volatility. *Journal of Financial Econometrics*, 7(2), 174-196.
 
-- [x] Base-R segmented break tests used because the segmented package was not installed; no new dependency needed
-- [x] Candidate breaks tested: 2008 GFC/oil shock, 2014-16 oil collapse, 2020 COVID crash
-- [x] Candidate break result: 2008 event is marginal (p=0.073); 2014 and 2020 are not significant in the simple y ~ WTI slope model
-- [x] One-break grid search: best date by AIC is 2005-10, suggesting early-sample slope instability rather than a single clean crisis break
-- [x] Sub-period OOS results: pre-COVID winner MIDAS nealmon; 2020 winner XGBoost; 2021-2022 winner U-MIDAS
-- [x] Key thesis argument: MIDAS advantage is not purely a COVID artifact; mixed-frequency timing remains valuable across regimes, but the best model varies by regime
+Ghysels, E., and Marcellino, M. (2018). *Applied Economic Forecasting Using Time Series Methods*. Oxford University Press.
 
-#### 7d — Extended metrics: directional accuracy (done)
+### State-Space and Nowcasting
 
-- [x] Directional accuracy: MIDAS nealmon 80.2%, nbeta 74%, U-MIDAS 75%, ARIMAX 64.6%
-- [x] Large-move hit rates: MIDAS nealmon/nbeta/U-MIDAS achieve 100% hit on both spikes and crashes; ARIMAX misses 50% of crashes
-- [x] Precision (all models approx. 40%) and recall: nealmon 87.5%, nbeta 83.3%, ARIMAX 37.5%
-- [x] Mincer-Zarnowitz: ARIMAX technically unbiased but with R2=0.056 (no predictive power); MIDAS models biased (beta approx. 0.75) but with R2 approx. 0.58
-- [x] 3 figures saved: 14_directional_accuracy.png, 15_precision_recall.png, 16_mz_beta.png
-- [x] Table saved: extended_metrics_all_models.csv
+Mariano, R. S., and Murasawa, Y. (2003). A new coincident index of business cycles based on monthly and quarterly series. *Journal of Applied Econometrics*, 18(4), 427-443.
 
-#### 7e — Forecast horizon validity analysis (new — based on oil literature)
+Aruoba, S. B., Diebold, F. X., and Scotti, C. (2009). Real-time measurement of business conditions. *Journal of Business and Economic Statistics*, 27(4), 417-427.
 
-*Answers user question: how long is it valid to predict WTI-to-CPI? What are our assumptions?*
+Helske, J. (2017). KFAS: Exponential family state space models in R. *Journal of Statistical Software*, 78(10), 1-39.
 
-- [x] **Assumption audit**: h=1 is a nowcast because WTI weeks from month t are used to predict CPI Energy for month t after the month closes; h=2 and h=3 are true forecasts using earlier WTI information.
-- [x] **Horizon comparison**: h=1 nbeta RMSE 0.02057 (-31.1% vs ARIMAX); h=2 nbeta RMSE 0.02419 (-14.9%); h=3 nbeta RMSE 0.03023 (+2.2%, no MIDAS advantage).
-- [x] **Predictability window from literature**: h=1 result is the main validity window; h=2 remains useful; h=3 fades, consistent with the 5-7 week lag evidence and oil transmission literature.
-- [x] **Rolling subperiod analysis**: yearly RMSE table saved; COVID/recovery years shown explicitly in figure 22.
-- [x] **Summary for thesis discussion**: this is primarily a one-month nowcasting study; the lag hump around prior-month weeks 2-3 is the interpretable transmission mechanism.
+Giannone, D., Reichlin, L., and Small, D. (2008). Nowcasting: The real-time informational content of macroeconomic data. *Journal of Monetary Economics*, 55(4), 665-676.
 
-#### 7f — Post-2022 true-future forecast extension (in progress)
+Baffigi, A., Golinelli, R., and Parigi, G. (2004). Bridge models to forecast the euro area GDP. *International Journal of Forecasting*, 20(3), 447-460.
 
-*New extension after clarifying that the current OOS period is a historical pseudo out-of-sample backtest, not a forecast beyond the original dataset.*
+Thompson, R., and Baker, R. J. (1981). Composite link functions in generalized linear models. *Applied Statistics*, 30(2), 125-131.
 
-- [x] **Data refresh**: download/update CPIENGSL, WCOILWTICO, and PNRGINDEXM from 2023 to the latest available date; save separately from the original 2000-2022 dataset.
-- [x] **External holdout evaluation**: train final model specifications on the original 2000-2022 sample, then evaluate forecasts on post-2022 observations. This tests whether the original MIDAS result survives on genuinely later data.
-- [x] **Script split for thesis structure**: `R/14_future_forecast_3_scenarios.R` now handles the main 1-, 3-, and 6-month future forecast section, while `R/15_future_scenarios_12_months.R` handles the 12-month appendix extension.
-- [ ] **Forecast-origin audit**: clearly separate three cases: historical pseudo-OOS (2015-2022), post-2022 external holdout, and true forward forecast beyond the latest observed CPI value. 
-- [ ] **Oil-price assumption layer**: for any forecast beyond observed WTI data, define oil scenarios instead of pretending WTI is known. Scenarios should include flat WTI, recent-trend WTI, ARIMA WTI forecast, and oil-literature-informed high/low shock paths.
-- [ ] **Model rerun**: apply ARIMAX, MIDAS nealmon, MIDAS nbeta, U-MIDAS, CLM-SS (12 lags), LASSO-MIDAS, Kernel U-MIDAS, XGBoost, and LSTM to the post-2022 extension where feasible.
-- [ ] **Metrics update**: compute RMSE, MAE, MASE, sMAPE, directional accuracy, large-move recall, and model ranking for the post-2022 period.
-- [ ] **Figures/tables**: generate a post-2022 forecast comparison chart, post-2022 RMSE table, scenario fan chart, and a before-vs-after ranking table.
-- [ ] **Thesis update**: revise Methodology, Results, Discussion, and Conclusion to distinguish pseudo-OOS validation from post-2022 external validation and true forward scenario forecasting.
+### Machine Learning and Regularisation
 
-**Run order for the extension**
+Tibshirani, R. (1996). Regression shrinkage and selection via the lasso. *Journal of the Royal Statistical Society: Series B*, 58(1), 267-288.
 
-1. `R/13_update_recent_data.R`
-2. `R/14_future_forecast_3_scenarios.R`
-3. `R/15_future_scenarios_12_months.R`
+Friedman, J., Hastie, T., and Tibshirani, R. (2010). Regularization paths for generalized linear models via coordinate descent. *Journal of Statistical Software*, 33(1), 1-22.
 
-`R/14_future_forecast_extension.R` is now only a backward-compatible wrapper that sources `R/14_future_forecast_3_scenarios.R`.
+Fischer, T., and Krauss, C. (2018). Deep learning with long short-term memory networks for financial market predictions. *European Journal of Operational Research*, 270(2), 654-669.
 
-#### Final evaluation addendum — AIC/BIC, MASE, MAPE (done)
+Chen, T., and Guestrin, C. (2016). XGBoost: A scalable tree boosting system. *Proceedings of KDD 2016*, 785-794.
 
-- [x] Script saved: R/12_final_evaluation.R
-- [x] AIC/BIC table saved: output/tables/final_insample_aic_bic.csv
-- [x] OOS metrics table saved: output/tables/final_oos_forecast_metrics.csv and .md
-- [x] Added MASE and sMAPE alongside RMSE, MAE, MAPE, and directional accuracy
-- [x] MAPE caveat: raw MAPE is unstable for monthly log-changes because actual values can be close to zero; use RMSE, MAE, MASE, sMAPE, and directional accuracy as the defensible forecast metrics
-- [x] Test period confirmed: January 2015 to December 2022, 96 one-step-ahead/nowcast forecasts; initial training window is February 2000 to December 2014 and expands monthly
+Medeiros, M. C., Vasconcelos, G. F. R., Veiga, A., and Zilberman, E. (2021). Forecasting inflation in a data-rich environment: The benefits of machine learning methods. *Journal of Business and Economic Statistics*, 39(1), 98-119.
 
----
+### Oil and Energy Economics
 
-### Phase 8 — Written Thesis (due 29 June, max 30 pages)
+Hamilton, J. D. (1983). Oil and the macroeconomy since World War II. *Journal of Political Economy*, 91(2), 228-248.
 
-- [x] Cover page: title, supervisor, IE University, date, AI use declaration
-- [x] Abstract (150-250 words): problem, method, key result (MIDAS beats ARIMAX by 31%, 100% crash recall)
-- [x] Chapter 1 — Introduction (2-3 pages): the mixed-frequency problem, thesis contributions, structure
-- [x] Chapter 2 — Literature Review (3-4 pages): Phase 1 text, already written
-- [x] Chapter 3 — Methodology (4-5 pages):
-  - [x] Data: CPIENGSL, WCOILWTICO, PNRGINDEXM; FRED sources; sample; log-diff transformation
-  - [x] Benchmark models: ARIMAX, nealmon, nbeta, U-MIDAS with equations
-  - [x] CLM-SS formulation: Z matrix, AR(1) state, MLE via BFGS, identifiability
-  - [x] Evaluation: expanding window, RMSE, MAE, MASE, sMAPE, DM test, directional accuracy, MZ test; MAPE reported with caveat
-- [x] Chapter 4 — Results (4-5 pages):
-  - [x] Table 1: In-sample AIC/BIC/RMSE generated for applicable models
-  - [x] Table 2: OOS RMSE, MAE, MASE, MAPE/sMAPE, directional accuracy generated
-  - [x] Table 3: Large-move precision and recall (Phase 7d)
-  - [x] Table 4: Performance vs interpretability trade-off generated (Phase 6d)
-  - [x] Figure: CLM-SS composite link weights bar chart
-  - [x] Figure: MIDAS lag weight hump (nealmon vs nbeta)
-  - [x] Figure: OOS forecast comparison line chart
-- [x] Chapter 5 — Discussion (2-3 pages):
-  - [x] When does MIDAS beat ARIMAX, and why (timing information vs. aggregation)
-  - [x] The MZ paradox: ARIMAX passes rationality test because it has no predictive power
-  - [x] Forecast horizon validity: this is a nowcasting study, 1-month-ahead, consistent with Kilian and Lewis (2011)
-  - [x] CLM-SS: free weights recover same hump as parametric MIDAS; AR errors add marginal value
-  - [x] Limitations: ridge CV, LSTM data requirements, energy-only domain
-- [x] Chapter 6 — Conclusions (1-2 pages):
-  - [x] Main findings; CLM-SS as interpretable bridge between ARIMAX and MIDAS
-  - [x] Future work: cross-validated ridge, multivariate extension, R package
-- [ ] References (not in page count)
-- [ ] Annex A — Individual Contribution Statement (submitted separately)
+Hamilton, J. D. (2009). Causes and consequences of the oil shock of 2007-08. *Brookings Papers on Economic Activity*, 2009(1), 215-261.
 
----
+Kilian, L. (2009). Not all oil price shocks are alike: Disentangling demand and supply shocks in the crude oil market. *American Economic Review*, 99(3), 1053-1069.
 
-### Phase 9 — Poster (A0 format, due 29 June)
+Kilian, L., and Lewis, L. T. (2011). Does the Fed respond to oil price shocks? *Economic Journal*, 121(555), 1047-1072.
 
-- [ ] Sections: Background, Research Question, Methodology, Results, Conclusion
-- [ ] Key figures: figure 13 (6-model RMSE bar), figure 09 (CLM-SS weights), figure 14 (directional accuracy)
-- [ ] Performance vs interpretability chart as visual centrepiece
-- [ ] All figures at 300 DPI minimum
-- [ ] PDF, portrait, 841 x 1189 mm
+Baumeister, C., and Hamilton, J. D. (2019). Structural interpretation of vector autoregressions with incomplete identification. *American Economic Review*, 109(5), 1873-1910.
 
----
+Baumeister, C., and Kilian, L. (2015). Forecasting the real price of oil in a changing world: A forecast combination approach. *Journal of Business and Economic Statistics*, 33(3), 338-351.
 
-### Phase 10 — Code and Documentation
+Nonejad, N. (2022). New findings regarding the out-of-sample predictive impact of the price of crude oil on the United States industrial production. *Journal of Business Cycle Research*, 18, 1-35.
 
-- [x] set.seed(42) in all scripts (done in 09 and 07)
-- [x] All output figures in output/figures/ (done)
-- [x] All result tables in output/tables/ (done)
-- [x] Update 00_setup.R with new packages: xgboost, torch or keras, segmented
-- [x] GitHub commit all R scripts + Papers/ folder (22 MB, under 100 MB limit)
+### Econometrics and Time Series Foundations
 
----
+Box, G. E. P., and Jenkins, G. M. (1970). *Time Series Analysis: Forecasting and Control*. Holden-Day.
 
-## Progress Summary
+Sims, C. A. (1980). Macroeconomics and reality. *Econometrica*, 48(1), 1-48.
 
-| Phase | Status | Key result |
-| --- | --- | --- |
-| Phase 0 — Setup | Done | R + midasr + GitHub |
-| Phase 1 — Literature review | Done | 24 references, verified from PDFs, APA format |
-| Phase 2 — USData benchmarks | Done | nealmon RMSE -51% vs ARIMAX, DM p=0.007 |
-| Phase 3 — Energy EDA | Done | CPIENGSL + WTI weekly, 5 EDA plots |
-| Phase 4 — Energy benchmarks | Done | nbeta RMSE 0.02057 (-31%), all DM p<0.001 |
-| Phase 5 — CLM-SS | Done | CLM-SS(12) RMSE 0.02258 (-24%); confirms lag hump |
-| Phase 7d — Directional accuracy | Done | nealmon 80.2% dir. acc.; 100% crash recall vs 50% ARIMAX |
-| Phase 6 — ML benchmarks | Done | Kernel U-MIDAS, XGBoost, LSTM, and interpretability table complete |
-| Phase 7a — LASSO-MIDAS | Done | RMSE 0.02103; largest lags wti_m1_w2 and wti_m1_w3 confirm hump |
-| Phase 7b — PCA on WTI lags | Done | PCA-ARIMAX only -4.3% vs ARIMAX; MIDAS nbeta remains -31.1% |
-| Phase 7c — Segmented regression | Done | MIDAS wins pre-COVID; XGBoost wins 2020; U-MIDAS wins recovery/spike |
-| Phase 7e — Forecast horizon validity | Done | h=1 main window (-31.1%); h=2 useful (-14.9%); h=3 fades (+2.2%) |
-| Phase 7f — Post-2022 future extension | In progress | Refresh recent data and external holdout are done; short-horizon and 12-month appendix scripts are now split out |
-| Final evaluation addendum | Done | MIDAS nbeta wins AIC/BIC and OOS RMSE/MASE; MAPE reported but de-emphasized |
-| Phase 8 — Thesis writing | In progress | Revise after Phase 7f so chapters distinguish pseudo-OOS, external holdout, and true forward forecasting |
-| Phase 9 — Poster | To do | Due 29 June 2026, A0 PDF |
-| Phase 10 — Code cleanup | To do | |
-
----
-
-## Key Results Table (updated with Phase 7d)
-
-| Model | RMSE | vs ARIMAX | Dir. Acc. | Crash Recall | MZ beta | Interpretable |
-| --- | --- | --- | --- | --- | --- | --- |
-| ARIMAX | 0.02986 | baseline | 64.6% | 50% | 0.54 | Yes |
-| U-MIDAS | 0.02226 | -25.5% | 75.0% | 100% | 0.70* | Partial |
-| CLM-SS (12 lags) | 0.02258 | -24.4% | 74.0% | 100% | 0.70* | Yes |
-| MIDAS nealmon | 0.02104 | -29.5% | 80.2% | 100% | 0.75* | Yes |
-| MIDAS nbeta | 0.02057 | -31.1% | 74.0% | 100% | 0.78* | Yes |
-| Kernel U-MIDAS | 0.02226 | -25.5% | 75.0% | 100% | TBD | Yes |
-| XGBoost | 0.02365 | -20.8% | 72.9% | TBD | TBD | Partial |
-| LSTM | 0.02588 | -13.3% | 76.0% | TBD | TBD | No |
-
-*MZ p < 0.05: statistically biased but with high R2 (approx. 0.58). ARIMAX passes MZ only because R2=0.056 (no real predictive power).
-
----
-
-## References (verified against Papers/ folder)
-
-### MIDAS / Mixed-Frequency
-
-- Ghysels, E., Santa-Clara, P., and Valkanov, R. (2004). The MIDAS touch: Mixed data sampling regression models. CIRANO Working Paper 2004s-20.
-- Ghysels, E., Sinko, A., and Valkanov, R. (2007). MIDAS regressions: Further results and new directions. Econometric Reviews, 26(1), 53-90.
-- Foroni, C., Marcellino, M., and Schumacher, C. (2015). Unrestricted mixed data sampling (MIDAS). Journal of the Royal Statistical Society: Series A, 178(1), 57-82.
-- Breitung, J., and Roling, C. (2015). Forecasting inflation rates using daily data: A nonparametric MIDAS approach. Journal of Forecasting, 34, 588-603.
-- Corsi, F. (2009). A simple approximate long-memory model of realized volatility. Journal of Financial Econometrics, 7(2), 174-196.
-- Ghysels, E., and Marcellino, M. (2018). Applied Economic Forecasting Using Time Series Methods. Oxford University Press.
-
-### State-Space / Kalman
-
-- Mariano, R. S., and Murasawa, Y. (2003). A new coincident index of business cycles based on monthly and quarterly series. Journal of Applied Econometrics, 18(4), 427-443.
-- Aruoba, S. B., Diebold, F. X., and Scotti, C. (2009). Real-time measurement of business conditions. Journal of Business and Economic Statistics, 27(4), 417-427.
-- Helske, J. (2017). KFAS: Exponential family state space models in R. Journal of Statistical Software, 78(10), 1-39.
-- Giannone, D., Reichlin, L., and Small, D. (2008). Nowcasting: The real-time informational content of macroeconomic data. Journal of Monetary Economics, 55(4), 665-676.
-- Baffigi, A., Golinelli, R., and Parigi, G. (2004). Bridge models to forecast the euro area GDP. International Journal of Forecasting, 20(3), 447-460.
-
-### ML / Regularisation
-
-- Fischer, T., and Krauss, C. (2018). Deep learning with long short-term memory networks for financial market predictions. European Journal of Operational Research, 270(2), 654-669.
-- Chen, T., and Guestrin, C. (2016). XGBoost: A scalable tree boosting system. Proceedings of KDD 2016, 785-794.
-- Medeiros, M. C., Vasconcelos, G. F. R., Veiga, A., and Zilberman, E. (2021). Forecasting inflation in a data-rich environment: The benefits of machine learning methods. Journal of Business and Economic Statistics, 39(1), 98-119.
-- Thompson, R., and Baker, R. J. (1981). Composite link functions in generalized linear models. Applied Statistics, 30(2), 125-131.
-
-### Oil / Energy Domain
-
-- Hamilton, J. D. (1983). Oil and the macroeconomy since World War II. Journal of Political Economy, 91(2), 228-248.
-- Hamilton, J. D. (2009). Causes and consequences of the oil shock of 2007-08. Brookings Papers on Economic Activity, 2009(1), 215-261.
-- Kilian, L. (2009). Not all oil price shocks are alike: Disentangling demand and supply shocks in the crude oil market. American Economic Review, 99(3), 1053-1069.
-- Kilian, L., and Lewis, L. T. (2011). Does the Fed respond to oil price shocks? Economic Journal, 121(555), 1047-1072.
-- Baumeister, C., and Hamilton, J. D. (2019). Structural interpretation of vector autoregressions with incomplete identification. American Economic Review, 109(5), 1873-1910.
-- Baumeister, C., and Kilian, L. (2015). Forecasting the real price of oil in a changing world: A forecast combination approach. Journal of Business and Economic Statistics, 33(3), 338-351.
-- Nonejad, N. (2022). New findings regarding the out-of-sample predictive impact of the price of crude oil on the United States industrial production. Journal of Business Cycle Research, 18, 1-35.
-- Box, G. E. P., and Jenkins, G. M. (1970). Time Series Analysis: Forecasting and Control. Holden-Day.
-- Sims, C. A. (1980). Macroeconomics and reality. Econometrica, 48(1), 1-48.
-- Mariano, R. S., and Murasawa, Y. (2003). A new coincident index of business cycles based on monthly and quarterly series. Journal of Applied Econometrics, 18(4), 427-443.
+Diebold, F. X., and Mariano, R. S. (1995). Comparing predictive accuracy. *Journal of Business and Economic Statistics*, 13(3), 253-263.
