@@ -249,26 +249,30 @@ model_cols <- c("tomato", "steelblue", "forestgreen",
 
 # ---- 5a: Directional accuracy bar chart --------------------
 render(function() {
+  ord  <- order(metrics_tbl$Dir_Acc_pct)
+  tbl  <- metrics_tbl[ord, ]
+  cols <- model_cols[ord]
   par(mar = c(4, 9, 4, 2))
-  bp <- barplot(metrics_tbl$Dir_Acc_pct,
-                names.arg = metrics_tbl$Model,
+  bp <- barplot(tbl$Dir_Acc_pct,
+                names.arg = tbl$Model,
                 horiz = TRUE, las = 1,
-                col   = model_cols, border = "white",
+                col   = cols, border = "white",
                 xlim  = c(0, 100),
                 main  = "Directional Accuracy by Model (2015-2022)",
                 xlab  = "% of months with correct sign prediction")
   abline(v = 50, col = "grey50", lty = 2, lwd = 1.2)
-  text(metrics_tbl$Dir_Acc_pct + 1, bp,
-       labels = paste0(metrics_tbl$Dir_Acc_pct, "%"),
+  text(tbl$Dir_Acc_pct + 1, bp,
+       labels = paste0(tbl$Dir_Acc_pct, "%"),
        adj = 0, cex = 0.82)
 }, "output/figures/14_directional_accuracy.png", 10, 5)
 
 # ---- 5b: Precision and Recall grouped bar chart ------------
 render(function() {
-  prec <- metrics_tbl$Precision_pct
-  rec  <- metrics_tbl$Recall_pct
-  nm   <- metrics_tbl$Model
-  n    <- length(nm)
+  ord  <- order(metrics_tbl$Recall_pct)
+  tbl  <- metrics_tbl[ord, ]
+  prec <- tbl$Precision_pct
+  rec  <- tbl$Recall_pct
+  nm   <- tbl$Model
 
   par(mar = c(5, 9, 4, 5))
   x <- barplot(rbind(prec, rec),
@@ -281,28 +285,32 @@ render(function() {
                xlim       = c(0, 115),
                main       = "Large-Move Precision and Recall (|actual| > 1 SD)",
                xlab       = "Percentage (%)")
+  text(prec + 1.5, x[1, ], labels = paste0(prec, "%"), adj = 0, cex = 0.75)
+  text(rec  + 1.5, x[2, ], labels = paste0(rec,  "%"), adj = 0, cex = 0.75)
   legend("topright", bty = "n", fill = c("steelblue", "tomato"),
          legend = c("Precision", "Recall"), cex = 0.85)
 }, "output/figures/15_precision_recall.png", 11, 6)
 
 # ---- 5c: Mincer-Zarnowitz beta coefficients ----------------
 render(function() {
-  par(mar = c(5, 9, 4, 2))
-  bp <- barplot(metrics_tbl$MZ_beta,
-                names.arg = metrics_tbl$Model,
+  ord <- order(metrics_tbl$MZ_beta)
+  tbl <- metrics_tbl[ord, ]
+  par(mar = c(5, 9, 4, 6))
+  bp <- barplot(tbl$MZ_beta,
+                names.arg = tbl$Model,
                 horiz = TRUE, las = 1,
-                col   = ifelse(metrics_tbl$MZ_p < 0.05, "tomato", "steelblue"),
+                col   = ifelse(tbl$MZ_p < 0.05, "firebrick", "royalblue"),
                 border = "white",
-                xlim  = c(0, max(metrics_tbl$MZ_beta, na.rm = TRUE) * 1.3),
+                xlim  = c(0, max(tbl$MZ_beta, na.rm = TRUE) * 1.35),
                 main  = "Mincer-Zarnowitz Beta Coefficient (ideal = 1.0)",
                 xlab  = "Estimated beta  (H0: beta = 1)")
   abline(v = 1, col = "grey40", lty = 2, lwd = 1.5)
-  text(metrics_tbl$MZ_beta + 0.02, bp,
-       labels = sprintf("%.2f%s", metrics_tbl$MZ_beta,
-                         ifelse(metrics_tbl$MZ_p < 0.05, "*", "")),
+  text(tbl$MZ_beta + 0.02, bp,
+       labels = sprintf("%.2f%s", tbl$MZ_beta,
+                         ifelse(tbl$MZ_p < 0.05, "*", "")),
        adj = 0, cex = 0.82)
   legend("bottomright", bty = "n", cex = 0.8,
-         fill = c("steelblue", "tomato"),
+         fill = c("royalblue", "firebrick"),
          legend = c("MZ unbiased (p >= 0.05)", "MZ biased (p < 0.05)"))
 }, "output/figures/16_mz_beta.png", 10, 5)
 
